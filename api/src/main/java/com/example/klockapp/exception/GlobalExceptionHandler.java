@@ -6,6 +6,7 @@ import org.apache.coyote.BadRequestException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -13,6 +14,13 @@ import java.security.SignatureException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<String>> handleGeneralError(Exception ex){
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>("Error Occurred", ex.getMessage()));
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiResponse<String>> handleNotFound(NotFoundException ex){
@@ -78,17 +86,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(SignatureException.class)
-    public ResponseEntity<ApiResponse<String>> handleInvalidToken(SignatureException ex){
+    public ResponseEntity<ApiResponse<String>> handleInvalidSignature(SignatureException ex){
         return ResponseEntity
                 .status(HttpStatus.NOT_ACCEPTABLE)
-                .body(new ApiResponse<>("Invalid Signature", ex.getMessage()));
+                .body(new ApiResponse<>("Invalid JWT Signature", ex.getMessage()));
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiResponse<String>> handleInvalidToken(IllegalStateException ex){
+    public ResponseEntity<ApiResponse<String>> handleIllegalState(IllegalStateException ex){
         return ResponseEntity
                 .status(HttpStatus.NOT_ACCEPTABLE)
-                .body(new ApiResponse<>("Illegal Signature", ex.getMessage()));
+                .body(new ApiResponse<>("Illegal State", ex.getMessage()));
     }
 
     @ExceptionHandler(BadRequestException.class)
@@ -99,7 +107,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(NullPointerException.class)
-    public ResponseEntity<ApiResponse<String>> handleInvalidToken(NullPointerException ex){
+    public ResponseEntity<ApiResponse<String>> handleNullPointer(NullPointerException ex){
         return ResponseEntity
                 .status(HttpStatus.NOT_ACCEPTABLE)
                 .body(new ApiResponse<>("Null Pointer", ex.getMessage()));
@@ -110,5 +118,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_ACCEPTABLE)
                 .body(new ApiResponse<>("Weak Password In Use", ex.getMessage()));
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ApiResponse<String>> handlePermissionError(AuthorizationDeniedException ex){
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>("User Unauthorized", ex.getMessage()));
     }
 }

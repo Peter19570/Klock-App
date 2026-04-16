@@ -12,6 +12,7 @@ import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.mapper.BranchMapper;
 import com.example.klockapp.mapper.UserMapper;
 import com.example.klockapp.model.Branch;
+import com.example.klockapp.model.User;
 import com.example.klockapp.repo.BranchRepo;
 import com.example.klockapp.repo.ClockEventRepo;
 import com.example.klockapp.repo.UserRepo;
@@ -153,8 +154,15 @@ public class BranchService {
     }
 
     @Transactional
-    public void deleteBranch(Long id) {
-        branchRepo.deleteById(id);
+    public void deleteBranch(Long branchId) {
+        Branch branch = branchRepo.findById(branchId)
+                        .orElseThrow(() -> new NotFoundException("Branch not found"));
+
+        for (User user : branch.getAssignedStaff()){
+            user.setHomeBranch(null);
+        }
+
+        branchRepo.deleteById(branch.getId());
     }
 
     @Transactional
