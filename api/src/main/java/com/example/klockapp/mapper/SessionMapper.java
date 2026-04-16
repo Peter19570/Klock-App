@@ -1,6 +1,6 @@
 package com.example.klockapp.mapper;
 
-import com.example.klockapp.dto.response.record.SessionResponse;
+import com.example.klockapp.dto.response.SessionResponse;
 import com.example.klockapp.model.WorkSession;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

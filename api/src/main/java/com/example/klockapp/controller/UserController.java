@@ -2,9 +2,9 @@ package com.example.klockapp.controller;
 
 import com.example.klockapp.dto.internal.CustomUserPrincipal;
 import com.example.klockapp.dto.request.UserCreationRequest;
-import com.example.klockapp.dto.response.record.ApiResponse;
-import com.example.klockapp.dto.response.record.UserDetailResponse;
-import com.example.klockapp.dto.response.record.UserResponse;
+import com.example.klockapp.dto.response.ApiResponse;
+import com.example.klockapp.dto.response.UserDetailResponse;
+import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.filter.UserFilter;
 import com.example.klockapp.service.UserService;
 import lombok.RequiredArgsConstructor;

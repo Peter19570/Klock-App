@@ -1,7 +1,7 @@
 package com.example.klockapp.controller;
 
 import com.example.klockapp.dto.request.LiveLocationRequest;
-import com.example.klockapp.dto.response.record.LiveLocationResponse;
+import com.example.klockapp.dto.response.LiveLocationResponse;
 import com.example.klockapp.service.LiveLocationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;

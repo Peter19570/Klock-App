@@ -1,6 +1,6 @@
 package com.example.klockapp.exception;
 
-import com.example.klockapp.dto.response.record.ApiResponse;
+import com.example.klockapp.dto.response.ApiResponse;
 import com.example.klockapp.exception.custom.*;
 import org.apache.coyote.BadRequestException;
 import org.springframework.http.HttpStatus;

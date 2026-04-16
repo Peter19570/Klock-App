@@ -1,8 +1,8 @@
 package com.example.klockapp.mapper;
 
 import com.example.klockapp.dto.request.BranchRequest;
-import com.example.klockapp.dto.response.record.BranchDetailsResponse;
-import com.example.klockapp.dto.response.record.BranchResponse;
+import com.example.klockapp.dto.response.BranchDetailsResponse;
+import com.example.klockapp.dto.response.BranchResponse;
 import com.example.klockapp.model.Branch;
 import org.mapstruct.*;
 

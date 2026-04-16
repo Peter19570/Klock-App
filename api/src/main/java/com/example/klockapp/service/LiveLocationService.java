@@ -1,7 +1,7 @@
 package com.example.klockapp.service;
 
 import com.example.klockapp.dto.request.LiveLocationRequest;
-import com.example.klockapp.dto.response.record.LiveLocationResponse;
+import com.example.klockapp.dto.response.LiveLocationResponse;
 import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.model.User;
 import com.example.klockapp.repo.ClockEventRepo;

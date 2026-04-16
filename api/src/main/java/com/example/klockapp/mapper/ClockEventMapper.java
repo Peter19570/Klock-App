@@ -1,7 +1,7 @@
 package com.example.klockapp.mapper;
 
 import com.example.klockapp.dto.request.ClockInRequest;
-import com.example.klockapp.dto.response.record.ClockEventResponse;
+import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.model.ClockEvent;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

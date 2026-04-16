@@ -1,4 +1,4 @@
-package com.example.klockapp.dto.response.record;
+package com.example.klockapp.dto.response;
 
 
 import com.example.klockapp.enums.SessionStatus;

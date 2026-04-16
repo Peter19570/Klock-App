@@ -2,8 +2,8 @@ package com.example.klockapp.mapper;
 
 import com.example.klockapp.dto.request.AuthRequest;
 import com.example.klockapp.dto.request.UserCreationRequest;
-import com.example.klockapp.dto.response.record.UserDetailResponse;
-import com.example.klockapp.dto.response.record.UserResponse;
+import com.example.klockapp.dto.response.UserDetailResponse;
+import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.model.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
