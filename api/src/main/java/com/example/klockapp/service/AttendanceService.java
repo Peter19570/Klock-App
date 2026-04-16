@@ -28,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -86,7 +87,6 @@ public class AttendanceService {
         event.setClockInTime(Instant.now());
 
         session.setStatus(SessionStatus.ACTIVE);
-        workSessionRepo.save(session);
 
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
@@ -103,13 +103,28 @@ public class AttendanceService {
         WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), principal.user())
                         .orElseThrow(() -> new NotFoundException("Work Session not found"));
 
+        Duration limit = Duration.ofMinutes(2);
+        Duration eventDiff = Duration.between(activeEvent.getClockInTime(),Instant.now());
+
+        // Check time diff btw the active clock and clock out to prevent recording accidental clock-ins
+        if (eventDiff.compareTo(limit) < 0){
+            clockEventRepo.delete(activeEvent);
+
+            session.setStatus(SessionStatus.COMPLETED);
+            return null;
+        }
+
         activeEvent.setClockOutTime(Instant.now());
         activeEvent.setClockOutType(request.clockOutType() != null ? request.clockOutType() : ClockOutType.MANUAL);
+
         session.setStatus(SessionStatus.COMPLETED);
 
         return clockEventMapper.toDto(clockEventRepo.save(activeEvent));
     }
 
+    /**
+     * Undo clock-out logic to toggle on previously clocked-out clock-event, Not used in this system at the moment
+     * */
     public void undoClockOut(Long clockEventId) {
         ClockEvent event = clockEventRepo.findById(clockEventId)
                 .orElseThrow(() -> new NotFoundException("Movement record not found."));

@@ -82,6 +82,8 @@ public class BranchService {
                 branch.getDisplayName(),
                 branch.getRadius(),
                 branch.getBranchStatus(),
+                branch.getLatitude(),
+                branch.getLongitude(),
                 assignedStaff.size(), // totalAssignedStaff
                 activeNow.size(),     // currentActiveCount
                 assignedStaff,

@@ -58,17 +58,6 @@ public class SessionController {
     }
 
     /**
-     * PUT /api/v1/sessions/undo/{id}
-     * Admin/Super Admin: Undo a specific clock-out event[cite: 10, 31].
-     */
-//    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-//    @PutMapping("/undo/{id}")
-//    public ResponseEntity<Void> undoClockOut(@PathVariable Long id) {
-//        attendanceService.undoClockOut(id);
-//        return ResponseEntity.ok().build();
-//    }
-
-    /**
      * GET /api/v1/sessions/all
      * Personal or Administrative workday history with nested movements[cite: 9, 36].
      */

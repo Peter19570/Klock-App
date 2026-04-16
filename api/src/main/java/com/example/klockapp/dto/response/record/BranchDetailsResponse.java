@@ -9,6 +9,8 @@ public record BranchDetailsResponse(
         String displayName,
         Double radius,
         BranchStatus branchStatus,
+        Double latitude,
+        Double longitude,
 
         // Summary Stats
         long totalAssignedStaff,
