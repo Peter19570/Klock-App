@@ -5,16 +5,15 @@ import {
   Loader2,
   ChevronDown,
   Clock,
-  LogOut,
   Zap,
   Hand,
   CalendarDays,
-  Undo2,
   User,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { getUserSessionsById, undoClockOut } from "@/services/sessionService";
+import { getUserSessionsById } from "@/services/sessionService";
 import type { SessionResponse, ClockEventResponse, UserDetailResponse } from "@/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -44,15 +43,7 @@ function formatDuration(start: string, end?: string | null): string {
 
 // ─── Movement row ─────────────────────────────────────────────────────────────
 
-function MovementRow({
-  movement,
-  onUndo,
-  undoing,
-}: {
-  movement: ClockEventResponse;
-  onUndo?: (id: number) => void;
-  undoing: boolean;
-}) {
+function MovementRow({ movement }: { movement: ClockEventResponse }) {
   const isActive = !movement.clockOutTime;
   const isManual = movement.clockOutType === "MANUAL";
 
@@ -73,11 +64,6 @@ function MovementRow({
         {movement.branchName && (
           <span className="text-primary/60 truncate">@ {movement.branchName}</span>
         )}
-        {movement.latitudeIn != null && movement.longitudeIn != null && (
-          <span className="text-[10px] text-muted-foreground/50 font-mono">
-            {movement.latitudeIn.toFixed(4)}, {movement.longitudeIn.toFixed(4)}
-          </span>
-        )}
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
@@ -92,22 +78,6 @@ function MovementRow({
             <Zap className="h-2.5 w-2.5" /> Auto
           </span>
         )}
-
-        {!isActive && onUndo && (
-          <Button
-            size="icon" variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            title="Undo clock-out"
-            disabled={undoing}
-            onClick={() => onUndo(movement.id)}
-          >
-            {undoing ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Undo2 className="h-3 w-3" />
-            )}
-          </Button>
-        )}
       </div>
     </div>
   );
@@ -119,33 +89,16 @@ function SessionCard({
   session,
   index,
   defaultOpen,
-  onUndoSuccess,
-  canUndo,
 }: {
   session: SessionResponse;
   index: number;
   defaultOpen: boolean;
-  onUndoSuccess: () => void;
-  canUndo: boolean;
 }) {
   const [expanded, setExpanded] = React.useState(defaultOpen);
-  const [undoingId, setUndoingId] = React.useState<number | null>(null);
 
   const isActive      = session.status === "ACTIVE";
   const firstMovement = session.movements[0];
   const lastMovement  = session.movements[session.movements.length - 1];
-
-  const handleUndo = async (movementId: number) => {
-    setUndoingId(movementId);
-    try {
-      await undoClockOut(movementId);
-      onUndoSuccess();
-    } catch {
-      // silently fail — parent refreshes
-    } finally {
-      setUndoingId(null);
-    }
-  };
 
   return (
     <motion.div
@@ -190,9 +143,17 @@ function SessionCard({
             </p>
           </div>
 
-          <ChevronDown
-            className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-          />
+          {/* Right */}
+          <div className="flex items-center gap-2 shrink-0">
+            {!isActive && (
+              <span className="hidden sm:inline-flex items-center rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Done
+              </span>
+            )}
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+            />
+          </div>
         </div>
       </button>
 
@@ -207,15 +168,10 @@ function SessionCard({
           >
             <div className="px-4 pb-3 space-y-1.5 border-t border-border pt-3">
               <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                Clock events
+                Clock Events
               </p>
               {session.movements.map((m) => (
-                <MovementRow
-                  key={m.id}
-                  movement={m}
-                  onUndo={canUndo ? handleUndo : undefined}
-                  undoing={undoingId === m.id}
-                />
+                <MovementRow key={m.id} movement={m} />
               ))}
             </div>
           </motion.div>
@@ -230,11 +186,10 @@ function SessionCard({
 interface SessionPageContentProps {
   userId: number;
   displayName?: string;
-  canUndo: boolean;
   onBack?: () => void;
 }
 
-function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPageContentProps) {
+function SessionPageContent({ userId, displayName, onBack }: SessionPageContentProps) {
   const navigate = useNavigate();
 
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
@@ -242,13 +197,14 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
   const [hasMore, setHasMore]         = React.useState(true);
   const [loading, setLoading]         = React.useState(false);
   const [initialLoad, setInitialLoad] = React.useState(true);
+  const [refreshing, setRefreshing]   = React.useState(false);
   const [ownerName, setOwnerName]     = React.useState<string | null>(displayName ?? null);
   const loaderRef = React.useRef<HTMLDivElement>(null);
 
   const fetchPage = React.useCallback(
-    async (pageNum: number) => {
-      if (loading) return;
-      setLoading(true);
+    async (pageNum: number, isRefresh = false) => {
+      if (loading && !isRefresh) return;
+      if (!isRefresh) setLoading(true);
       try {
         const res  = await getUserSessionsById({ userId, page: pageNum, size: 20 });
         const data = res.data.data;
@@ -263,6 +219,7 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
       } finally {
         setLoading(false);
         setInitialLoad(false);
+        setRefreshing(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -280,6 +237,7 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
     if (initialLoad) fetchPage(0);
   }, [initialLoad, fetchPage]);
 
+  // Infinite scroll
   React.useEffect(() => {
     const el = loaderRef.current;
     if (!el) return;
@@ -293,11 +251,12 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
     return () => observer.disconnect();
   }, [fetchPage, hasMore, loading, page, initialLoad]);
 
-  const handleUndoSuccess = () => {
+  const handleRefresh = () => {
+    setRefreshing(true);
     setSessions([]);
     setPage(0);
     setHasMore(true);
-    setInitialLoad(true);
+    fetchPage(0, true);
   };
 
   const handleBack = () => (onBack ? onBack() : navigate(-1));
@@ -306,39 +265,53 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
+      {/* Sticky header — full width, matches dashboard width */}
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0 -ml-1">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <User className="h-3.5 w-3.5 text-primary" />
+
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <User className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-semibold text-foreground truncate leading-tight">
-                {ownerName ?? "User Sessions"}
+                {ownerName ?? "User"}
               </h1>
-              <p className="text-xs text-muted-foreground">Work session history</p>
+              <p className="text-xs text-muted-foreground leading-tight">Session History</p>
             </div>
           </div>
-          {sessions.length > 0 && (
-            <span className="text-xs text-muted-foreground shrink-0">
-              {sessions.length} session{sessions.length !== 1 ? "s" : ""}
-            </span>
-          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            {sessions.length > 0 && (
+              <span className="hidden sm:block text-xs text-muted-foreground">
+                {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={handleRefresh}
+              disabled={refreshing || initialLoad}
+              title="Refresh sessions"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5">
+      {/* Content — matches dashboard max-width */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
         {initialLoad ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
           </div>
         ) : sessions.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground text-sm">
+          <div className="text-center py-20 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
             No sessions found for this user.
           </div>
         ) : (
@@ -349,8 +322,6 @@ function SessionPageContent({ userId, displayName, canUndo, onBack }: SessionPag
                 session={session}
                 index={idx}
                 defaultOpen={idx === activeSessionIdx}
-                onUndoSuccess={handleUndoSuccess}
-                canUndo={canUndo}
               />
             ))}
 
@@ -373,10 +344,11 @@ interface UserSessionsPageProps {
   userId?: number;
   user?: UserDetailResponse;
   onBack?: () => void;
+  /** @deprecated Undo endpoints are disabled — prop kept for API compatibility */
   canUndo?: boolean;
 }
 
-export default function UserSessionsPage({ userId: propUserId, user, onBack, canUndo = false }: UserSessionsPageProps) {
+export default function UserSessionsPage({ userId: propUserId, user, onBack }: UserSessionsPageProps) {
   const { userId: paramUserId } = useParams<{ userId: string }>();
 
   const resolvedId  = propUserId ?? (paramUserId ? parseInt(paramUserId, 10) : null);
@@ -396,7 +368,6 @@ export default function UserSessionsPage({ userId: propUserId, user, onBack, can
     <SessionPageContent
       userId={resolvedId}
       displayName={displayName}
-      canUndo={canUndo}
       onBack={onBack}
     />
   );

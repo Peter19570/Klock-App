@@ -1,11 +1,14 @@
 import * as React from "react";
-import { ChevronLeft, ChevronRight, ChevronDown, Clock, LogOut, CalendarDays, RotateCcw, Hand, Zap } from "lucide-react";
+import * as ReactDOM from "react-dom";
+import {
+  ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
+  Hand, Zap, SlidersHorizontal, X, Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/services/api";
-import { undoClockOut } from "@/services/sessionService";
 import type { ApiResponse, PageResponse, SessionResponse, ClockEventResponse } from "@/types";
 
 function formatDate(dateStr: string) {
@@ -32,17 +35,108 @@ function formatDuration(start: string, end?: string | null): string {
   return `${m}m`;
 }
 
+// ─── Filter Modal ──────────────────────────────────────────────────────────────
+
+interface SessionFilterModalProps {
+  open: boolean;
+  onClose: () => void;
+  minDate: string;
+  maxDate: string;
+  onApply: (min: string, max: string) => void;
+  onClear: () => void;
+}
+
+function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear }: SessionFilterModalProps) {
+  const [localMin, setLocalMin] = React.useState(minDate);
+  const [localMax, setLocalMax] = React.useState(maxDate);
+
+  React.useEffect(() => {
+    if (open) {
+      setLocalMin(minDate);
+      setLocalMax(maxDate);
+    }
+  }, [open, minDate, maxDate]);
+
+  const handleApply = () => {
+    onApply(localMin, localMax);
+    onClose();
+  };
+
+  const handleClear = () => {
+    setLocalMin('');
+    setLocalMax('');
+    onClear();
+    onClose();
+  };
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Filter Sessions</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">From</Label>
+                <Input
+                  type="date"
+                  value={localMin}
+                  onChange={(e) => setLocalMin(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">To</Label>
+                <Input
+                  type="date"
+                  value={localMax}
+                  onChange={(e) => setLocalMax(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 mt-5">
+              <Button variant="outline" className="flex-1 h-9 text-sm" onClick={handleClear}>
+                Clear all
+              </Button>
+              <Button className="flex-1 h-9 text-sm" onClick={handleApply}>
+                Apply filters
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Movement row ─────────────────────────────────────────────────────────────
 
-function MovementRow({
-  movement,
-  onUndo,
-  undoing,
-}: {
-  movement: ClockEventResponse;
-  onUndo: (id: number) => void;
-  undoing: boolean;
-}) {
+function MovementRow({ movement }: { movement: ClockEventResponse }) {
   const isActive = !movement.clockOutTime;
   const isManual = movement.clockOutType === "MANUAL";
 
@@ -77,18 +171,6 @@ function MovementRow({
             <Zap className="h-2.5 w-2.5" /> Auto
           </span>
         ) : null}
-
-        {!isActive && movement.id !== -1 && (
-          <Button
-            size="icon" variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            disabled={undoing}
-            onClick={() => onUndo(movement.id)}
-            title="Undo clock-out"
-          >
-            <RotateCcw className={`h-3 w-3 ${undoing ? "animate-spin" : ""}`} />
-          </Button>
-        )}
       </div>
     </div>
   );
@@ -96,33 +178,12 @@ function MovementRow({
 
 // ─── Session card ─────────────────────────────────────────────────────────────
 
-function SessionCard({
-  session,
-  index,
-  onUndoSuccess,
-}: {
-  session: SessionResponse;
-  index: number;
-  onUndoSuccess: () => void;
-}) {
+function SessionCard({ session, index }: { session: SessionResponse; index: number }) {
   const [expanded, setExpanded] = React.useState(false);
-  const [undoingId, setUndoingId] = React.useState<number | null>(null);
 
-  const isActive = session.status === "ACTIVE";
+  const isActive      = session.status === "ACTIVE";
   const firstMovement = session.movements[0];
   const lastMovement  = session.movements[session.movements.length - 1];
-
-  const handleUndo = async (movementId: number) => {
-    setUndoingId(movementId);
-    try {
-      await undoClockOut(movementId);
-      onUndoSuccess();
-    } catch (err) {
-      console.error("Failed to undo clock-out", err);
-    } finally {
-      setUndoingId(null);
-    }
-  };
 
   return (
     <motion.div
@@ -197,12 +258,7 @@ function SessionCard({
               </p>
               {session.movements.length > 0 ? (
                 session.movements.map((m) => (
-                  <MovementRow
-                    key={m.id}
-                    movement={m}
-                    onUndo={handleUndo}
-                    undoing={undoingId === m.id}
-                  />
+                  <MovementRow key={m.id} movement={m} />
                 ))
               ) : (
                 <p className="text-xs text-muted-foreground py-1">No clock events recorded.</p>
@@ -218,12 +274,17 @@ function SessionCard({
 // ─── AdminSessions ────────────────────────────────────────────────────────────
 
 export default function AdminSessions() {
-  const [sessions, setSessions]     = React.useState<SessionResponse[]>([]);
-  const [totalPages, setTotalPages] = React.useState(0);
+  const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
+  const [totalPages, setTotalPages]   = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(0);
-  const [loading, setLoading]       = React.useState(false);
-  const [minDate, setMinDate]       = React.useState("");
-  const [maxDate, setMaxDate]       = React.useState("");
+  const [loading, setLoading]         = React.useState(false);
+
+  // Applied filters
+  const [minDate, setMinDate] = React.useState("");
+  const [maxDate, setMaxDate] = React.useState("");
+
+  // Filter modal
+  const [filterOpen, setFilterOpen] = React.useState(false);
 
   const fetchSessions = React.useCallback(async (page: number) => {
     setLoading(true);
@@ -249,39 +310,61 @@ export default function AdminSessions() {
 
   React.useEffect(() => { fetchSessions(0); }, [fetchSessions]);
 
+  const activeFilterCount = [minDate !== '', maxDate !== ''].filter(Boolean).length;
+
   return (
     <div>
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2.5 mb-4 p-3.5 rounded-xl border border-border bg-muted/30">
-        <div className="flex flex-col gap-1 w-full sm:w-auto sm:flex-1 min-w-[130px]">
-          <Label className="text-xs">From</Label>
-          <Input type="date" value={minDate} onChange={(e) => setMinDate(e.target.value)} className="h-8 text-sm" />
-        </div>
-        <div className="flex flex-col gap-1 w-full sm:w-auto sm:flex-1 min-w-[130px]">
-          <Label className="text-xs">To</Label>
-          <Input type="date" value={maxDate} onChange={(e) => setMaxDate(e.target.value)} className="h-8 text-sm" />
-        </div>
-        <div className="flex items-end w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => { setMinDate(""); setMaxDate(""); }} className="w-full sm:w-auto">
-            Clear
-          </Button>
+      {/* Filter bar */}
+      <div className="flex items-center gap-3 mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2 h-9 shadow-sm"
+          onClick={() => setFilterOpen(true)}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+
+        {/* Active filter chips */}
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          {minDate && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              From: {minDate}
+              <button onClick={() => setMinDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {maxDate && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              To: {maxDate}
+              <button onClick={() => setMaxDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
         </div>
       </div>
 
       {/* Cards */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">Loading…</div>
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">No sessions found.</div>
+        <div className="text-center py-12 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
+          No sessions found.
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {sessions.map((session, idx) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              index={idx}
-              onUndoSuccess={() => fetchSessions(currentPage)}
-            />
+            <SessionCard key={session.id} session={session} index={idx} />
           ))}
         </div>
       )}
@@ -300,6 +383,16 @@ export default function AdminSessions() {
           </div>
         </div>
       )}
+
+      {/* Filter Modal */}
+      <SessionFilterModal
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        minDate={minDate}
+        maxDate={maxDate}
+        onApply={(min, max) => { setMinDate(min); setMaxDate(max); }}
+        onClear={() => { setMinDate(''); setMaxDate(''); }}
+      />
     </div>
   );
 }

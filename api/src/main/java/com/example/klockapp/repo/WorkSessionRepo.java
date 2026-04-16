@@ -21,4 +21,6 @@ public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSp
     Page<WorkSession> findAllByUser(User user, Pageable pageable);
 
     Page<WorkSession> findAllByUserId(Long userId, Pageable pageable);
+
+    Optional<WorkSession> findByWorkDate(LocalDate workDate, User user);
 }

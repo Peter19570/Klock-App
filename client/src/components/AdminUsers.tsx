@@ -1,10 +1,12 @@
 import * as React from 'react';
+import * as ReactDOM from 'react-dom';
 import {
   Search, Trash2, ChevronLeft, ChevronRight, User,
-  ArrowRightLeft, ChevronDown, Check,
+  ArrowRightLeft, ChevronDown, Check, SlidersHorizontal, X, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/services/api';
 import { transferUser } from '@/services/userService';
@@ -26,36 +28,194 @@ interface AdminUsersProps {
   liveUsers?: Map<string, { status: 'clocked-in' | 'clocked-out' | 'offline' }>;
 }
 
-function getStatusMeta(email: string, liveUsers: Map<string, { status: string }>) {
-  const entry = liveUsers.get(email);
-  if (!entry || entry.status === 'offline') return { dot: 'bg-gray-400', label: 'Offline' };
-  if (entry.status === 'clocked-in')  return { dot: 'bg-emerald-500', label: 'Clocked In' };
-  if (entry.status === 'clocked-out') return { dot: 'bg-red-500',     label: 'Clocked Out' };
-  return { dot: 'bg-gray-400', label: 'Offline' };
+// ─── Filter Modal ──────────────────────────────────────────────────────────────
+
+interface FilterModalProps {
+  open: boolean;
+  onClose: () => void;
+  nameFilter: string;
+  emailFilter: string;
+  branchFilter: number | '';
+  branches: BranchResponse[];
+  isSuperAdmin: boolean;
+  onApply: (name: string, email: string, branch: number | '') => void;
+  onClear: () => void;
 }
 
-export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUsers = new Map() }: AdminUsersProps) {
-  const [users, setUsers] = React.useState<UserResponse[]>([]);
-  const [totalPages, setTotalPages] = React.useState(0);
-  const [currentPage, setCurrentPage] = React.useState(0);
-  const [loading, setLoading] = React.useState(false);
+function FilterModal({
+  open, onClose,
+  nameFilter, emailFilter, branchFilter,
+  branches, isSuperAdmin,
+  onApply, onClear,
+}: FilterModalProps) {
+  const [localName, setLocalName]     = React.useState(nameFilter);
+  const [localEmail, setLocalEmail]   = React.useState(emailFilter);
+  const [localBranch, setLocalBranch] = React.useState<number | ''>(branchFilter);
 
-  const [nameFilter, setNameFilter] = React.useState('');
-  const [emailFilter, setEmailFilter] = React.useState('');
+  // Sync when modal opens
+  React.useEffect(() => {
+    if (open) {
+      setLocalName(nameFilter);
+      setLocalEmail(emailFilter);
+      setLocalBranch(branchFilter);
+    }
+  }, [open, nameFilter, emailFilter, branchFilter]);
+
+  const activeCount = [
+    nameFilter !== '',
+    emailFilter !== '',
+    branchFilter !== '',
+  ].filter(Boolean).length;
+
+  const handleApply = () => {
+    onApply(localName, localEmail, localBranch);
+    onClose();
+  };
+
+  const handleClear = () => {
+    setLocalName('');
+    setLocalEmail('');
+    setLocalBranch('');
+    onClear();
+    onClose();
+  };
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Filter Users</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Name */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Name</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Search by name…"
+                    value={localName}
+                    onChange={(e) => setLocalName(e.target.value)}
+                    className="pl-9 h-9"
+                  />
+                  {localName && (
+                    <button
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setLocalName('')}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Search by email…"
+                    value={localEmail}
+                    onChange={(e) => setLocalEmail(e.target.value)}
+                    className="pl-9 h-9"
+                  />
+                  {localEmail && (
+                    <button
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setLocalEmail('')}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Branch — super admin only */}
+              {isSuperAdmin && branches.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Branch</Label>
+                  <select
+                    value={localBranch}
+                    onChange={(e) => setLocalBranch(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">All branches</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2.5 mt-5">
+              <Button variant="outline" className="flex-1 h-9 text-sm" onClick={handleClear}>
+                Clear all
+              </Button>
+              <Button className="flex-1 h-9 text-sm" onClick={handleApply}>
+                Apply filters
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
+
+export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUsers = new Map() }: AdminUsersProps) {
+  const [users, setUsers]             = React.useState<UserResponse[]>([]);
+  const [totalPages, setTotalPages]   = React.useState(0);
+  const [currentPage, setCurrentPage] = React.useState(0);
+  const [loading, setLoading]         = React.useState(false);
+
+  // Applied filters
+  const [nameFilter, setNameFilter]     = React.useState('');
+  const [emailFilter, setEmailFilter]   = React.useState('');
   const [branchFilter, setBranchFilter] = React.useState<number | ''>('');
-  const debouncedName = useDebounce(nameFilter);
+  const debouncedName  = useDebounce(nameFilter);
   const debouncedEmail = useDebounce(emailFilter);
+
+  // Filter modal
+  const [filterOpen, setFilterOpen] = React.useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = React.useState<number | null>(null);
 
-  const [transferUserId, setTransferUserId] = React.useState<number | null>(null);
-  const [transferBranchId, setTransferBranchId] = React.useState<number | null>(null);
+  const [transferUserId, setTransferUserId]       = React.useState<number | null>(null);
+  const [transferBranchId, setTransferBranchId]   = React.useState<number | null>(null);
   const [transferDropdownOpen, setTransferDropdownOpen] = React.useState(false);
-  const [transferring, setTransferring] = React.useState(false);
+  const [transferring, setTransferring]           = React.useState(false);
   const transferDropdownRef = React.useRef<HTMLDivElement>(null);
 
   const [selectedUser, setSelectedUser] = React.useState<UserDetailResponse | null>(null);
-  const [loadingUser, setLoadingUser] = React.useState<number | null>(null);
+  const [loadingUser, setLoadingUser]   = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -133,85 +293,116 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
     }
   };
 
+  const handleApplyFilters = (name: string, email: string, branch: number | '') => {
+    setNameFilter(name);
+    setEmailFilter(email);
+    setBranchFilter(branch);
+  };
+
+  const handleClearFilters = () => {
+    setNameFilter('');
+    setEmailFilter('');
+    setBranchFilter('');
+  };
+
+  const activeFilterCount = [
+    nameFilter !== '',
+    emailFilter !== '',
+    branchFilter !== '',
+  ].filter(Boolean).length;
+
   if (selectedUser) {
     return (
       <UserSessionsPage
         userId={selectedUser.id}
         user={selectedUser}
         onBack={() => setSelectedUser(null)}
-        canUndo={true}
+        canUndo={false}
       />
     );
   }
 
   return (
     <div>
-      {/* Search filters */}
-      <div className="flex flex-col sm:flex-row gap-2.5 mb-4">
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search by name…"
-            value={nameFilter}
-            onChange={(e) => setNameFilter(e.target.value)}
-            className="pl-9"
-          />
+      {/* Top bar: filter button (left) */}
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2 h-9"
+          onClick={() => setFilterOpen(true)}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+
+        {/* Active filter chips */}
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          {nameFilter && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              Name: {nameFilter}
+              <button onClick={() => setNameFilter('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {emailFilter && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              Email: {emailFilter}
+              <button onClick={() => setEmailFilter('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {branchFilter !== '' && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              {branches.find(b => b.id === branchFilter)?.displayName ?? 'Branch'}
+              <button onClick={() => setBranchFilter('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
         </div>
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search by email…"
-            value={emailFilter}
-            onChange={(e) => setEmailFilter(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        {isSuperAdmin && branches.length > 0 && (
-          <select
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value === '' ? '' : Number(e.target.value))}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">All branches</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.displayName}</option>
-            ))}
-          </select>
-        )}
       </div>
 
-      {/* User cards */}
+      {/* User list */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">Loading…</div>
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
       ) : users.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">No users found.</div>
+        <div className="text-center py-16 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
+          No users found.
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user, idx) => {
-            const isTransferMode   = transferUserId === user.id;
+            const isTransferMode        = transferUserId === user.id;
+            const isLoadingThisUser     = loadingUser === user.id;
             const selectedTransferBranch = branches.find((b) => b.id === transferBranchId);
-            const isLoadingThisUser = loadingUser === user.id;
-            const { dot, label } = getStatusMeta(user.email, liveUsers);
 
             return (
               <motion.div
                 key={user.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
-                whileHover={{ scale: 1.012, transition: { duration: 0.15 } }}
-                className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md hover:border-primary/25 transition-shadow"
+                transition={{ duration: 0.18, delay: Math.min(idx * 0.03, 0.15) }}
+                className={`rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
+                  isLoadingThisUser ? 'opacity-60 pointer-events-none' : ''
+                }`}
               >
-                {/* ── Main row ── */}
                 <div
-                  className={`flex items-center justify-between gap-3 px-4 py-3 cursor-pointer ${
-                    isLoadingThisUser ? 'opacity-60 pointer-events-none' : ''
-                  }`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
                   onClick={() => !isTransferMode && handleCardClick(user.id)}
                 >
                   {/* Left: avatar + info */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="relative shrink-0">
+                    <div className="shrink-0">
                       {user.picture ? (
                         <img
                           src={user.picture}
@@ -223,11 +414,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                           <User className="h-4 w-4 text-primary" />
                         </div>
                       )}
-                      {/* Status dot */}
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card ${dot}`}
-                        title={label}
-                      />
                     </div>
 
                     <div className="min-w-0">
@@ -241,23 +427,11 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                     </div>
                   </div>
 
-                  {/* Right: status badge + actions */}
+                  {/* Right: actions */}
                   <div
                     className="flex items-center gap-2 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Compact status pill */}
-                    <span className={`hidden sm:inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                      dot === 'bg-emerald-500'
-                        ? 'bg-emerald-500/10 text-emerald-500'
-                        : dot === 'bg-red-500'
-                        ? 'bg-red-500/10 text-red-500'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-                      {label}
-                    </span>
-
                     {isLoadingThisUser && (
                       <span className="text-xs text-muted-foreground animate-pulse">…</span>
                     )}
@@ -381,6 +555,19 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
           </div>
         </div>
       )}
+
+      {/* Filter Modal */}
+      <FilterModal
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        nameFilter={nameFilter}
+        emailFilter={emailFilter}
+        branchFilter={branchFilter}
+        branches={branches}
+        isSuperAdmin={isSuperAdmin}
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+      />
     </div>
   );
 }

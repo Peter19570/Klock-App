@@ -85,6 +85,9 @@ public class AttendanceService {
         event.setBranch(targetBranch);
         event.setClockInTime(Instant.now());
 
+        session.setStatus(SessionStatus.ACTIVE);
+        workSessionRepo.save(session);
+
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
 
@@ -97,8 +100,12 @@ public class AttendanceService {
                 .findByWorkSessionUserAndClockOutTimeIsNull(principal.user())
                 .orElseThrow(() -> new NotFoundException("No active clock-in session found."));
 
+        WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), principal.user())
+                        .orElseThrow(() -> new NotFoundException("Work Session not found"));
+
         activeEvent.setClockOutTime(Instant.now());
         activeEvent.setClockOutType(request.clockOutType() != null ? request.clockOutType() : ClockOutType.MANUAL);
+        session.setStatus(SessionStatus.COMPLETED);
 
         return clockEventMapper.toDto(clockEventRepo.save(activeEvent));
     }

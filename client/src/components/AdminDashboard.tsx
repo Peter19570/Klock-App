@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   LayoutDashboard, Users, Clock, GitBranch, Plus, Trash2, Loader2,
   Lock, Unlock, X, MapPin, ChevronRight, ArrowLeft, Maximize2,
-  Minimize2, Menu, ArrowUp,
+  Minimize2, Menu, ArrowUp, Users2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -166,15 +166,18 @@ interface BranchDetailPageProps {
   notify: (type: 'success' | 'error', msg: string) => void;
 }
 
+type StaffTab = 'assigned' | 'active';
+
 function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageProps) {
-  const [details, setDetails] = useState<BranchDetailsResponse | null>(null);
+  const [details, setDetails]         = useState<BranchDetailsResponse | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
-  const [liveRadius, setLiveRadius] = useState<number | null>(null);
+  const [liveRadius, setLiveRadius]   = useState<number | null>(null);
   const [togglingLock, setTogglingLock] = useState(false);
   const [currentLocked, setCurrentLocked] = useState(
     branch.branchStatus === 'LOCKED' || branch.isLocked,
   );
-  const topRef = useRef<HTMLDivElement>(null);
+  const [staffTab, setStaffTab]       = useState<StaffTab>('assigned');
+  const topRef                        = useRef<HTMLDivElement>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
@@ -224,7 +227,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         Back to branches
       </button>
 
-      {/* Header */}
+      {/* Header — name + status badge + lock toggle */}
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="text-xl font-bold text-foreground">{branch.displayName}</h2>
         {currentLocked ? (
@@ -236,32 +239,53 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
             <Unlock className="h-3 w-3" /> Unlocked
           </span>
         )}
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto gap-2"
-          onClick={handleToggleLock}
-          disabled={togglingLock}
-        >
-          {togglingLock
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            : currentLocked
-              ? <><Unlock className="h-3.5 w-3.5" />Unlock Branch</>
-              : <><Lock className="h-3.5 w-3.5" />Lock Branch</>
-          }
-        </Button>
+
+        {/* Desktop: full button. Mobile: icon only */}
+        <div className="ml-auto">
+          {/* Desktop */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="hidden sm:flex gap-2"
+            onClick={handleToggleLock}
+            disabled={togglingLock}
+          >
+            {togglingLock
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : currentLocked
+                ? <><Unlock className="h-3.5 w-3.5" />Unlock Branch</>
+                : <><Lock className="h-3.5 w-3.5" />Lock Branch</>
+            }
+          </Button>
+          {/* Mobile: padlock icon */}
+          <Button
+            size="icon"
+            variant="outline"
+            className="sm:hidden h-8 w-8"
+            onClick={handleToggleLock}
+            disabled={togglingLock}
+            title={currentLocked ? 'Unlock Branch' : 'Lock Branch'}
+          >
+            {togglingLock
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : currentLocked
+                ? <Unlock className="h-4 w-4" />
+                : <Lock className="h-4 w-4" />
+            }
+          </Button>
+        </div>
       </div>
 
-      {/* Stats row — always at top */}
+      {/* Stats row */}
       {loadingDetails ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : details ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Total Staff', value: details.totalAssignedStaff, className: 'text-foreground' },
-            { label: 'Active Now', value: details.currentActiveCount, className: 'text-emerald-500' },
-            { label: 'Radius', value: `${branch.radius}m`, className: 'text-foreground' },
-            { label: 'Status', value: currentLocked ? 'Locked' : 'Unlocked', className: currentLocked ? 'text-amber-500' : 'text-emerald-500' },
+            { label: 'Total Staff',  value: details.totalAssignedStaff,  className: 'text-foreground' },
+            { label: 'Active Now',   value: details.currentActiveCount,  className: 'text-emerald-500' },
+            { label: 'Radius',       value: `${branch.radius}m`,          className: 'text-foreground' },
+            { label: 'Status',       value: currentLocked ? 'Locked' : 'Unlocked', className: currentLocked ? 'text-amber-500' : 'text-emerald-500' },
           ].map(({ label, value, className }) => (
             <div key={label} className="rounded-xl bg-muted/60 dark:bg-muted/30 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
               <p className="text-xs text-muted-foreground">{label}</p>
@@ -271,7 +295,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         </div>
       ) : null}
 
-      {/* Branch Settings — directly below stats */}
+      {/* Branch Settings + Map */}
       <div className="flex flex-col xl:flex-row gap-6 items-start">
         <div className="w-full xl:flex-1">
           <LocationSettings
@@ -287,50 +311,114 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         </div>
       </div>
 
-      {/* Staff sections — below settings */}
+      {/* Staff section — tabbed */}
       {details && (
-        <>
-          {details.activeNow.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Currently Clocked In ({details.activeNow.length})
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {details.activeNow.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                    <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
-                      {u.fullName?.charAt(0) ?? '?'}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
-                      <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] overflow-hidden">
+          {/* Tab buttons */}
+          <div className="flex border-b border-border">
+            <button
+              onClick={() => setStaffTab('assigned')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${
+                staffTab === 'assigned' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Users2 className="h-4 w-4" />
+              Assigned Staff
+              <span className={`inline-flex items-center justify-center h-4.5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${
+                staffTab === 'assigned' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}>
+                {details.assignedStaff.length}
+              </span>
+              {staffTab === 'assigned' && (
+                <motion.div
+                  layoutId="branch-staff-tab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+            </button>
+            <button
+              onClick={() => setStaffTab('active')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${
+                staffTab === 'active' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Active Now
+              <span className={`inline-flex items-center justify-center h-4.5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${
+                staffTab === 'active' ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+              }`}>
+                {details.activeNow.length}
+              </span>
+              {staffTab === 'active' && (
+                <motion.div
+                  layoutId="branch-staff-tab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+            </button>
+          </div>
 
-          {details.assignedStaff.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-              <h3 className="text-sm font-semibold text-foreground mb-3">All Assigned Staff ({details.assignedStaff.length})</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {details.assignedStaff.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {u.fullName?.charAt(0) ?? '?'}
+          {/* Tab content */}
+          <div className="p-4">
+            <AnimatePresence mode="wait">
+              {staffTab === 'assigned' ? (
+                <motion.div
+                  key="assigned"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {details.assignedStaff.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No assigned staff.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {details.assignedStaff.map((u) => (
+                        <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                            {u.fullName?.charAt(0) ?? '?'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                            <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
-                      <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="active"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {details.activeNow.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No one is currently active.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {details.activeNow.map((u) => (
+                        <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                          <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
+                            {u.fullName?.charAt(0) ?? '?'}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                            <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       )}
 
       {/* Back to top */}
@@ -358,30 +446,29 @@ export function AdminDashboard() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const toastRef = useRef<SplashedPushNotificationsHandle>(null);
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [activeTab, setActiveTab]     = useState<TabId>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [mapFocusBranchId, setMapFocusBranchId] = useState<number | null>(null);
   const [mapExpanded, setMapExpanded] = useState(false);
-  // Responsive hamburger for branch list on small screens
   const [branchListOpen, setBranchListOpen] = useState(false);
 
-  const [branches, setBranches] = useState<BranchResponse[]>([]);
-  const [liveRadius, setLiveRadius] = useState<number | null>(null);
+  const [branches, setBranches]       = useState<BranchResponse[]>([]);
+  const [liveRadius, setLiveRadius]   = useState<number | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<BranchResponse | null>(null);
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [deletingBranchId, setDeletingBranchId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting]       = useState(false);
 
   const { users: liveUsers } = useAdminWebSocket();
 
   const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
-    { id: 'sessions', label: 'Sessions', icon: <Clock className="w-4 h-4" /> },
+    { id: 'users',     label: 'Users',     icon: <Users className="w-4 h-4" /> },
+    { id: 'sessions',  label: 'Sessions',  icon: <Clock className="w-4 h-4" /> },
     isSuperAdmin
       ? { id: 'branches' as TabId, label: 'Branches', icon: <GitBranch className="w-4 h-4" /> }
-      : { id: 'branch' as TabId, label: 'Branch', icon: <MapPin className="w-4 h-4" /> },
+      : { id: 'branch'   as TabId, label: 'Branch',   icon: <MapPin className="w-4 h-4" /> },
   ];
 
   const notify = useCallback((type: 'success' | 'error', msg: string) => {
@@ -392,7 +479,6 @@ export function AdminDashboard() {
     try {
       const res = await getAllBranches({ page: 0, size: 100 });
       const content = res.data.data.content ?? [];
-      // Normalize branchStatus → isLocked
       setBranches(content.map((b) => ({
         ...b,
         isLocked: b.branchStatus === 'LOCKED' || b.isLocked,
@@ -532,7 +618,6 @@ export function AdminDashboard() {
                   <span className="ml-auto font-medium">{liveUsers.size} user{liveUsers.size !== 1 ? 's' : ''} tracked</span>
                 </div>
 
-                {/* Branch summary cards — desktop inline, mobile hamburger */}
                 {isSuperAdmin && branches.length > 0 && (
                   <>
                     {/* Desktop: grid */}
@@ -557,7 +642,7 @@ export function AdminDashboard() {
                       ))}
                     </div>
 
-                    {/* Mobile: hamburger button + dropdown list */}
+                    {/* Mobile: hamburger */}
                     <div className="md:hidden">
                       <Button
                         variant="outline"
@@ -584,10 +669,7 @@ export function AdminDashboard() {
                                 <button
                                   key={b.id}
                                   className="flex w-full items-center justify-between px-4 py-3 text-sm text-foreground hover:bg-muted/40 transition-colors border-b border-border last:border-0"
-                                  onClick={() => {
-                                    setMapFocusBranchId(b.id);
-                                    setBranchListOpen(false);
-                                  }}
+                                  onClick={() => { setMapFocusBranchId(b.id); setBranchListOpen(false); }}
                                 >
                                   <span className="font-medium truncate">{b.displayName}</span>
                                   {b.isLocked && (
@@ -605,7 +687,7 @@ export function AdminDashboard() {
                   </>
                 )}
 
-                {/* Map card */}
+                {/* Map */}
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-base font-semibold text-foreground">
@@ -750,44 +832,110 @@ export function AdminDashboard() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.22, delay: Math.min(idx * 0.04, 0.2) }}
-                            className="rounded-xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] flex items-center justify-between gap-4 hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all"
+                            className="relative rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all overflow-hidden"
                           >
-                            <button className="flex-1 text-left min-w-0" onClick={() => setSelectedBranch(b)}>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-sm text-foreground truncate">{b.displayName}</p>
-                                {b.isLocked ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30">
-                                    <Lock className="h-2.5 w-2.5" /> Locked
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30">
-                                    <Unlock className="h-2.5 w-2.5" /> Unlocked
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {b.latitude.toFixed(5)}, {b.longitude.toFixed(5)} · Radius: {b.radius}m
-                              </p>
-                            </button>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setSelectedBranch(b)}>
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
-                              {deletingBranchId === b.id ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">Delete?</span>
-                                  <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={deleting} onClick={() => handleDeleteBranch(b.id)}>
-                                    {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Yes'}
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDeletingBranchId(null)}>No</Button>
+                            <div className="flex items-center gap-3 px-4 py-3.5">
+                              {/* Branch name — fades if too long */}
+                              <button
+                                className="flex-1 text-left min-w-0 overflow-hidden"
+                                onClick={() => setSelectedBranch(b)}
+                              >
+                                {/* Mobile: name + (status + radius) stacked */}
+                                <div className="sm:hidden">
+                                  <p className="font-semibold text-sm text-foreground truncate">{b.displayName}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {b.isLocked ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
+                                        <Lock className="h-2.5 w-2.5" /> Locked
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30 shrink-0">
+                                        <Unlock className="h-2.5 w-2.5" /> Unlocked
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">{b.radius}m radius</span>
+                                  </div>
                                 </div>
-                              ) : (
-                                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => setDeletingBranchId(b.id)}>
+
+                                {/* Desktop: name fades into status (centered) */}
+                                <div className="hidden sm:flex items-center gap-3">
+                                  {/* Fading name */}
+                                  <div className="relative min-w-0 flex-1 max-w-[55%]">
+                                    <p
+                                      className="font-semibold text-sm text-foreground truncate"
+                                      title={b.displayName}
+                                      style={{
+                                        maskImage: 'linear-gradient(to right, black 70%, transparent 100%)',
+                                        WebkitMaskImage: 'linear-gradient(to right, black 70%, transparent 100%)',
+                                      }}
+                                    >
+                                      {b.displayName}
+                                    </p>
+                                  </div>
+                                  {/* Status — centered */}
+                                  <div className="flex-1 flex justify-center">
+                                    {b.isLocked ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
+                                        <Lock className="h-2.5 w-2.5" /> Locked
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30 shrink-0">
+                                        <Unlock className="h-2.5 w-2.5" /> Unlocked
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Radius */}
+                                  <span className="text-xs text-muted-foreground shrink-0">{b.radius}m</span>
+                                </div>
+                              </button>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setSelectedBranch(b)}>
+                                  <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setDeletingBranchId(b.id)}
+                                >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              )}
+                              </div>
                             </div>
+
+                            {/* Delete confirmation — overlay, doesn't shift content */}
+                            <AnimatePresence>
+                              {deletingBranchId === b.id && (
+                                <motion.div
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.15 }}
+                                  className="absolute inset-0 flex items-center justify-between gap-3 px-4 bg-card/95 backdrop-blur-[2px] rounded-xl border border-destructive/30"
+                                >
+                                  <p className="text-sm text-foreground font-medium">
+                                    Delete <span className="text-destructive">{b.displayName}</span>?
+                                  </p>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <Button
+                                      size="sm" variant="outline" className="h-7 text-xs"
+                                      onClick={() => setDeletingBranchId(null)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      size="sm" variant="destructive" className="h-7 text-xs"
+                                      disabled={deleting}
+                                      onClick={() => handleDeleteBranch(b.id)}
+                                    >
+                                      {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
+                                    </Button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </motion.div>
                         ))}
                       </div>
