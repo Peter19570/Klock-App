@@ -8,18 +8,21 @@ import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
 import com.example.klockapp.filter.SessionFilter;
 import com.example.klockapp.service.AttendanceService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.time.LocalDate;
 
 @RestController
@@ -105,5 +108,27 @@ public class SessionController {
 
         boolean active = attendanceService.isActive(principal);
         return ResponseEntity.ok(new ApiResponse<>("Active status check", active));
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<Void> exportSessions(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            HttpServletResponse response) throws IOException {
+
+        LocalDate startDate = (start != null) ? start : LocalDate.now().withDayOfMonth(1);
+        LocalDate endDate = (end != null) ? end : LocalDate.now();
+
+        // 1. Set standard CSV headers
+        response.setContentType("text/csv");
+        response.setCharacterEncoding("UTF-8");
+        String filename = String.format("work_report_%s_to_%s.csv", startDate, endDate);
+        response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+
+        // 2. Delegate everything else to the service
+        attendanceService.processExport(response.getWriter(), principal, startDate, endDate);
+        return ResponseEntity.ok().build();
     }
 }

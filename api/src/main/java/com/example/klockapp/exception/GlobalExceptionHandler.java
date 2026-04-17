@@ -126,4 +126,11 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>("User Unauthorized", ex.getMessage()));
     }
+
+    @ExceptionHandler(WriteToCSVException.class)
+    public ResponseEntity<ApiResponse<String>> handleWriteError(WriteToCSVException ex){
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>("CSV Error", ex.getMessage()));
+    }
 }

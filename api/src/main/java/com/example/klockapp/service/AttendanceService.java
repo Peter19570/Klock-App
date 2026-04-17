@@ -9,6 +9,7 @@ import com.example.klockapp.enums.ClockOutType;
 import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.enums.UserRole;
 import com.example.klockapp.exception.custom.NotFoundException;
+import com.example.klockapp.exception.custom.WriteToCSVException;
 import com.example.klockapp.filter.SessionFilter;
 import com.example.klockapp.mapper.ClockEventMapper;
 import com.example.klockapp.mapper.SessionMapper;
@@ -22,15 +23,21 @@ import com.example.klockapp.repo.WorkSessionRepo;
 import com.example.klockapp.specification.WorkSessionSpecifications;
 import com.example.klockapp.util.LocationUtility;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.Writer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -175,5 +182,55 @@ public class AttendanceService {
         return clockEventRepo.existsByWorkSessionUserAndClockOutTimeIsNull(principal.user());
     }
 
+    /**
+     * Orchestrates the export by checking roles and filtering by branch.
+     */
+    @Transactional(readOnly = true)
+    public void processExport(Writer writer, CustomUserPrincipal principal, LocalDate start, LocalDate end) {
+
+        // 1. Identify if the user is a Super Admin
+        boolean isSuperAdmin = principal.getAuthorities().stream()
+                .anyMatch(a -> Objects.equals(a.getAuthority(), "ROLE_SUPER_ADMIN"));
+
+        // 2. Logic: Super Admin gets null (all branches),
+        // Admin gets the ID of the branch they belong to.
+        Long filterBranchId = isSuperAdmin ? null : principal.user().getHomeBranch().getId();
+
+        // 3. Stream with the branch filter
+        try (Stream<WorkSession> sessions = workSessionRepo.streamByBranchForExport(filterBranchId, start, end)) {
+            writeToCsv(writer, sessions);
+        }
+    }
+
+    private void writeToCsv(Writer writer, Stream<WorkSession> sessions) {
+        CSVFormat format = CSVFormat.DEFAULT.builder()
+                .setHeader("Date", "Staff Name", "Status", "Clock In", "Clock Out", "Type", "Branch")
+                .build();
+
+        try (CSVPrinter printer = new CSVPrinter(writer, format)) {
+            sessions.forEach(session -> {
+                String staffName = session.getUser().getFullName();
+
+                for (ClockEvent event : session.getClockEvents()) {
+                    try {
+                        printer.printRecord(
+                                session.getWorkDate(),
+                                staffName,
+                                session.getStatus(),
+                                event.getClockInTime(),
+                                event.getClockOutTime() != null ? event.getClockOutTime() : "STILL IN",
+                                event.getClockOutType(),
+                                event.getBranch().getDisplayName()
+                        );
+                    } catch (IOException e) {
+                        throw new WriteToCSVException("CSV Row Write Error", e.getMessage());
+                    }
+                }
+            });
+            printer.flush();
+        } catch (IOException e) {
+            throw new WriteToCSVException("CSV Initialization Error", e.getMessage());
+        }
+    }
 
 }

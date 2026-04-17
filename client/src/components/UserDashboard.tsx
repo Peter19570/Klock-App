@@ -533,30 +533,32 @@ export function UserDashboard() {
             </p>
           )}
 
-          <div className="flex items-center gap-2 rounded-lg bg-muted/60 border border-border px-3 py-2">
-            <Radio className="h-3.5 w-3.5 text-primary shrink-0" />
-            <p className="text-xs text-muted-foreground">
-              {branches.length > 1
-                ? `${branches.length} branches available`
-                : 'Office check-in radius: '}
-              {branches.length <= 1 && (
-                <span className="font-semibold text-foreground">{displayRadius}m</span>
-              )}
-            </p>
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-lg bg-muted/60 border border-border px-3 py-2">
+              <Radio className="h-3.5 w-3.5 text-primary shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {branches.length > 1
+                  ? `${branches.length} branches available`
+                  : 'Office check-in radius: '}
+                {branches.length <= 1 && (
+                  <span className="font-semibold text-foreground">{displayRadius}m</span>
+                )}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Session history */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-foreground">Session History</h2>
           <span className="text-xs text-muted-foreground">Last 20 sessions</span>
         </div>
 
         <SessionHistory sessions={sessions} />
 
-        <div className="mt-4 pt-4 border-t border-border flex justify-center">
+        <div className="flex justify-center pt-2">
           <Button
             variant="outline"
             className="gap-2"
