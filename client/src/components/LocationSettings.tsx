@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AnimatePresence, motion } from "framer-motion";
-import { getBranchDetails, getAllBranches, updateBranch, updateBranchRadius } from "@/services/branchService";
+import { getBranchDetails, updateBranch, updateBranchRadius } from "@/services/branchService";
 import {
   SplashedPushNotifications,
   type SplashedPushNotificationsHandle,
@@ -21,6 +21,12 @@ interface LocationSettingsProps {
    * Pass this when the branch has isLocked === true and the viewer is an ADMIN.
    */
   isLockedForCurrentUser?: boolean;
+  /**
+   * When true, lat/lng fields are hidden entirely.
+   * Use for ADMIN role — their lat/lng comes from getManagedBranch and is
+   * only used for map placement, not displayed in Branch Settings.
+   */
+  hideCoordinates?: boolean;
   onRadiusChange?: (radius: number) => void;
   onSaved?: () => void;
 }
@@ -28,6 +34,7 @@ interface LocationSettingsProps {
 export default function LocationSettings({
   branchId,
   isLockedForCurrentUser = false,
+  hideCoordinates = false,
   onRadiusChange,
   onSaved,
 }: LocationSettingsProps) {
@@ -51,32 +58,25 @@ export default function LocationSettings({
     setLoading(true);
     (async () => {
       try {
-        // BranchDetailsResponse doesn't carry lat/lng, so we also fetch from the
-        // compact BranchResponse (getAllBranches) which does include lat/lng.
-        const [detailRes, listRes] = await Promise.all([
-          getBranchDetails(branchId),
-          getAllBranches({ page: 0, size: 100 }),
-        ]);
+        const detailRes = await getBranchDetails(branchId);
         const detail = detailRes.data.data;
-        const compact = listRes.data.data.content.find((b) => b.id === branchId);
 
         setOriginal(detail);
         setDisplayName(detail.displayName ?? "");
         setRadiusRaw(String(detail.radius));
 
-        // Hydrate lat/lng from the compact BranchResponse
-        if (compact) {
-          setLatRaw(String(compact.latitude));
-          setLngRaw(String(compact.longitude));
+        // Lat/lng from BranchDetailsResponse (present in the GET /branches/{id} response)
+        if (!hideCoordinates) {
+          setLatRaw(String(detail.latitude ?? 0));
+          setLngRaw(String(detail.longitude ?? 0));
         }
-        // autoClockOutDuration not in detail DTO yet — leave at "0"
       } catch {
         toastRef.current?.createNotification('error', 'Load Failed', 'Failed to load branch settings.');
       } finally {
         setLoading(false);
       }
     })();
-  }, [branchId]);
+  }, [branchId, hideCoordinates]);
 
   const handleRadiusRawChange = (raw: string) => {
     setRadiusRaw(raw);
@@ -100,10 +100,11 @@ export default function LocationSettings({
 
     try {
       const lockedFieldsChanged =
+        !hideCoordinates &&
         original !== null &&
         (displayName !== original.displayName ||
-          latVal !== parseFloat(latRaw) ||
-          lngVal !== parseFloat(lngRaw));
+          latVal !== (original.latitude ?? 0) ||
+          lngVal !== (original.longitude ?? 0));
 
       if (unlocked && lockedFieldsChanged) {
         await updateBranch(branchId, {
@@ -130,16 +131,19 @@ export default function LocationSettings({
     } finally {
       setSaving(false);
     }
-  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, unlocked, original, onSaved]);
+  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, unlocked, original, hideCoordinates, onSaved]);
 
   React.useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
 
   const handleSaveClick = () => {
-    const latVal      = parseFloat(latRaw);
-    const lngVal      = parseFloat(lngRaw);
+    const latVal = parseFloat(latRaw);
+    const lngVal = parseFloat(lngRaw);
     const lockedFieldsChanged =
+      !hideCoordinates &&
       original !== null &&
-      (displayName !== original.displayName || latVal !== 0 || lngVal !== 0);
+      (displayName !== original.displayName ||
+        latVal !== (original.latitude ?? 0) ||
+        lngVal !== (original.longitude ?? 0));
 
     if (unlocked && lockedFieldsChanged) {
       setShowConfirm(true);
@@ -157,6 +161,8 @@ export default function LocationSettings({
   }
 
   const allReadOnly = isLockedForCurrentUser;
+  // Super Admin can unlock name+coords; Admin never sees the coords unlock section
+  const showLockedSection = !hideCoordinates;
 
   return (
     <div className="w-full">
@@ -175,82 +181,84 @@ export default function LocationSettings({
 
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4 sm:space-y-5">
 
-        {/* ── LOCKED SECTION ──────────────────────────────────────────────── */}
-        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
-          {!allReadOnly && (
-            <div className="flex items-center gap-3">
-              <Checkbox
-                id="unlock"
-                checked={unlocked}
-                onCheckedChange={(v) => setUnlocked(v === true)}
-              />
-              <Label htmlFor="unlock" className="flex items-center gap-2 cursor-pointer text-sm leading-snug">
-                {unlocked
-                  ? <Unlock className="h-4 w-4 text-primary shrink-0" />
-                  : <Lock   className="h-4 w-4 text-muted-foreground shrink-0" />}
-                {unlocked
-                  ? "Locked fields are editable — saving will require confirmation"
-                  : "Unlock display name, latitude & longitude"}
-              </Label>
-            </div>
-          )}
+        {/* ── LOCKED SECTION (Super Admin only — name + lat/lng) ──────────── */}
+        {showLockedSection && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+            {!allReadOnly && (
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="unlock"
+                  checked={unlocked}
+                  onCheckedChange={(v) => setUnlocked(v === true)}
+                />
+                <Label htmlFor="unlock" className="flex items-center gap-2 cursor-pointer text-sm leading-snug">
+                  {unlocked
+                    ? <Unlock className="h-4 w-4 text-primary shrink-0" />
+                    : <Lock   className="h-4 w-4 text-muted-foreground shrink-0" />}
+                  {unlocked
+                    ? "Locked fields are editable — saving will require confirmation"
+                    : "Unlock display name, latitude & longitude"}
+                </Label>
+              </div>
+            )}
 
-          {allReadOnly && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Lock className="h-3.5 w-3.5 shrink-0" />
-              Locked by Super Admin — contact your administrator to make changes.
-            </div>
-          )}
+            {allReadOnly && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                Locked by Super Admin — contact your administrator to make changes.
+              </div>
+            )}
 
-          {/* Display Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="displayName" className="flex items-center gap-1.5 text-sm">
-              Display Name
-              {(!unlocked || allReadOnly) && <Lock className="h-3 w-3 text-muted-foreground" />}
-            </Label>
-            <Input
-              id="displayName"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              disabled={!unlocked || allReadOnly}
-              className={!unlocked || allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
-            />
-          </div>
-
-          {/* Lat / Lng */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Display Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="latitude" className="flex items-center gap-1.5 text-sm">
-                Latitude
+              <Label htmlFor="displayName" className="flex items-center gap-1.5 text-sm">
+                Display Name
                 {(!unlocked || allReadOnly) && <Lock className="h-3 w-3 text-muted-foreground" />}
               </Label>
               <Input
-                id="latitude"
-                type="number"
-                step="any"
-                value={latRaw}
-                onChange={(e) => setLatRaw(e.target.value)}
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
                 disabled={!unlocked || allReadOnly}
                 className={!unlocked || allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="longitude" className="flex items-center gap-1.5 text-sm">
-                Longitude
-                {(!unlocked || allReadOnly) && <Lock className="h-3 w-3 text-muted-foreground" />}
-              </Label>
-              <Input
-                id="longitude"
-                type="number"
-                step="any"
-                value={lngRaw}
-                onChange={(e) => setLngRaw(e.target.value)}
-                disabled={!unlocked || allReadOnly}
-                className={!unlocked || allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
-              />
+
+            {/* Lat / Lng */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="latitude" className="flex items-center gap-1.5 text-sm">
+                  Latitude
+                  {(!unlocked || allReadOnly) && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </Label>
+                <Input
+                  id="latitude"
+                  type="number"
+                  step="any"
+                  value={latRaw}
+                  onChange={(e) => setLatRaw(e.target.value)}
+                  disabled={!unlocked || allReadOnly}
+                  className={!unlocked || allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="longitude" className="flex items-center gap-1.5 text-sm">
+                  Longitude
+                  {(!unlocked || allReadOnly) && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </Label>
+                <Input
+                  id="longitude"
+                  type="number"
+                  step="any"
+                  value={lngRaw}
+                  onChange={(e) => setLngRaw(e.target.value)}
+                  disabled={!unlocked || allReadOnly}
+                  className={!unlocked || allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── FREE FIELDS ─────────────────────────────────────────────────── */}
         <div className="space-y-1.5">

@@ -1,6 +1,6 @@
-import { useRef } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Clock, LogOut, Zap, Hand, CalendarDays } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { Clock, LogOut, Zap, Hand, CalendarDays, ChevronDown } from 'lucide-react';
 import type { SessionResponse, ClockEventResponse } from '../types';
 
 interface SessionHistoryProps {
@@ -83,13 +83,12 @@ function SessionCard({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '0px 0px -40px 0px' });
+  const [expanded, setExpanded] = useState(false);
 
   const isActive = session.status === 'ACTIVE';
-  // First movement's clock-in time used as the card date anchor
   const firstMovement = session.movements[0];
   const lastMovement = session.movements[session.movements.length - 1];
 
-  // Total duration: first clock-in → last clock-out (or now if still active)
   const totalDuration =
     firstMovement
       ? formatDuration(firstMovement.clockInTime, lastMovement?.clockOutTime)
@@ -101,26 +100,29 @@ function SessionCard({
       initial={{ opacity: 0, y: 14 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
       transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.25) }}
-      whileHover={{ scale: 1.01, transition: { duration: 0.18 } }}
-      className={`w-full p-4 rounded-xl border transition-shadow hover:shadow-md
+      className={`w-full rounded-xl border overflow-hidden transition-shadow hover:shadow-md
         ${isActive
           ? 'border-emerald-500/30 bg-emerald-500/5 hover:shadow-emerald-500/10'
           : 'border-border bg-card hover:shadow-black/10 dark:hover:shadow-black/40'
         }`}
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-3">
+      {/* Header row — click to expand */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left px-4 py-3"
+      >
         <div className="flex items-center gap-3">
-          <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0
             ${isActive ? 'bg-emerald-500/15' : 'bg-primary/10'}`}
           >
             {isActive ? (
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             ) : (
-              <CalendarDays className="w-4 h-4 text-primary" />
+              <CalendarDays className="w-3.5 h-3.5 text-primary" />
             )}
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm text-foreground flex items-center gap-2">
               {formatDate(session.workDate)}
               {isActive && (
@@ -131,20 +133,45 @@ function SessionCard({
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {session.movements.length} visit{session.movements.length !== 1 ? 's' : ''}
+              {firstMovement && (
+                <> · {formatTime(firstMovement.clockInTime)} → {isActive ? 'now' : formatTime(lastMovement?.clockOutTime)} · {totalDuration}</>
+              )}
             </p>
           </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-semibold text-sm text-foreground">{totalDuration}</span>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            />
+          </div>
         </div>
-        <p className="font-semibold text-sm text-foreground shrink-0">{totalDuration}</p>
-      </div>
+      </button>
 
-      {/* Movements */}
-      {session.movements.length > 0 && (
-        <div className="space-y-1.5 mt-2">
-          {session.movements.map((m) => (
-            <MovementRow key={m.id} movement={m} />
-          ))}
-        </div>
-      )}
+      {/* Expanded movements */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-3 space-y-1.5 border-t border-border pt-3">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                Clock Events
+              </p>
+              {session.movements.length > 0 ? (
+                session.movements.map((m) => (
+                  <MovementRow key={m.id} movement={m} />
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">No clock events recorded.</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

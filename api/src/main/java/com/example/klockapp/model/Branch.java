@@ -36,6 +36,6 @@ public class Branch extends BaseEntity {
     @OneToMany(mappedBy = "homeBranch")
     private List<User> assignedStaff = new ArrayList<>();
 
-    @OneToMany(mappedBy = "branch")
+    @OneToMany(mappedBy = "branch", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ClockEvent> activities = new ArrayList<>();
 }

@@ -2,7 +2,7 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
-  Hand, Zap, SlidersHorizontal, X, Loader2,
+  Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -278,6 +278,7 @@ export default function AdminSessions() {
   const [totalPages, setTotalPages]   = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(0);
   const [loading, setLoading]         = React.useState(false);
+  const [refreshing, setRefreshing]   = React.useState(false);
 
   // Applied filters
   const [minDate, setMinDate] = React.useState("");
@@ -310,6 +311,12 @@ export default function AdminSessions() {
 
   React.useEffect(() => { fetchSessions(0); }, [fetchSessions]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchSessions(currentPage);
+    setRefreshing(false);
+  };
+
   const activeFilterCount = [minDate !== '', maxDate !== ''].filter(Boolean).length;
 
   return (
@@ -319,7 +326,7 @@ export default function AdminSessions() {
         <Button
           variant="outline"
           size="sm"
-          className="flex items-center gap-2 h-9 shadow-sm"
+          className="flex items-center gap-2 h-9 shadow-sm shrink-0"
           onClick={() => setFilterOpen(true)}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -350,6 +357,17 @@ export default function AdminSessions() {
             </span>
           )}
         </div>
+
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+          title="Refresh sessions"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
 
       {/* Cards */}

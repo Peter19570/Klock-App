@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import {
   Search, Trash2, ChevronLeft, ChevronRight, User,
-  ArrowRightLeft, ChevronDown, Check, SlidersHorizontal, X, Loader2,
+  ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +52,6 @@ function FilterModal({
   const [localEmail, setLocalEmail]   = React.useState(emailFilter);
   const [localBranch, setLocalBranch] = React.useState<number | ''>(branchFilter);
 
-  // Sync when modal opens
   React.useEffect(() => {
     if (open) {
       setLocalName(nameFilter);
@@ -188,6 +187,138 @@ function FilterModal({
   );
 }
 
+// ─── Transfer Branch Modal ─────────────────────────────────────────────────────
+// Replaces the constrained inline dropdown — displays all branches in a
+// scrollable portal modal so no branches are cut off regardless of list size.
+
+interface TransferBranchModalProps {
+  open: boolean;
+  userName: string;
+  branches: BranchResponse[];
+  selectedBranchId: number | null;
+  transferring: boolean;
+  onSelect: (id: number) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function TransferBranchModal({
+  open, userName, branches, selectedBranchId,
+  transferring, onSelect, onConfirm, onCancel,
+}: TransferBranchModalProps) {
+  const [search, setSearch] = React.useState('');
+
+  React.useEffect(() => {
+    if (open) setSearch('');
+  }, [open]);
+
+  const filtered = branches.filter((b) =>
+    b.displayName.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[70]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl w-full max-w-sm flex flex-col max-h-[80vh]"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-primary" />
+                  Transfer Branch
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Moving <span className="font-medium text-foreground">{userName}</span> to:
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onCancel}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Search */}
+            <div className="px-5 py-3 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search branches…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 h-9"
+                />
+                {search && (
+                  <button
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setSearch('')}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Branch list — scrollable */}
+            <div className="flex-1 overflow-y-auto px-5 pb-2 min-h-0">
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">No branches found.</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {filtered.map((b) => {
+                    const isSelected = selectedBranchId === b.id;
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => onSelect(b.id)}
+                        className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                          isSelected
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-foreground hover:bg-muted/60'
+                        }`}
+                      >
+                        <span className="truncate">{b.displayName}</span>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
+              <Button variant="outline" className="flex-1" onClick={onCancel} disabled={transferring}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!selectedBranchId || transferring}
+                onClick={onConfirm}
+              >
+                {transferring ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Moving…</> : 'Confirm'}
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUsers = new Map() }: AdminUsersProps) {
@@ -195,6 +326,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
   const [totalPages, setTotalPages]   = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(0);
   const [loading, setLoading]         = React.useState(false);
+  const [refreshing, setRefreshing]   = React.useState(false);
 
   // Applied filters
   const [nameFilter, setNameFilter]     = React.useState('');
@@ -208,24 +340,13 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
 
   const [deleteConfirm, setDeleteConfirm] = React.useState<number | null>(null);
 
-  const [transferUserId, setTransferUserId]       = React.useState<number | null>(null);
-  const [transferBranchId, setTransferBranchId]   = React.useState<number | null>(null);
-  const [transferDropdownOpen, setTransferDropdownOpen] = React.useState(false);
-  const [transferring, setTransferring]           = React.useState(false);
-  const transferDropdownRef = React.useRef<HTMLDivElement>(null);
+  // Transfer state — modal-based
+  const [transferUserId, setTransferUserId]     = React.useState<number | null>(null);
+  const [transferBranchId, setTransferBranchId] = React.useState<number | null>(null);
+  const [transferring, setTransferring]         = React.useState(false);
 
   const [selectedUser, setSelectedUser] = React.useState<UserDetailResponse | null>(null);
   const [loadingUser, setLoadingUser]   = React.useState<number | null>(null);
-
-  React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (transferDropdownRef.current && !transferDropdownRef.current.contains(e.target as Node)) {
-        setTransferDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const fetchUsers = React.useCallback(async (page: number) => {
     setLoading(true);
@@ -285,7 +406,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
       fetchUsers(currentPage);
       setTransferUserId(null);
       setTransferBranchId(null);
-      setTransferDropdownOpen(false);
     } catch (err) {
       console.error('Failed to transfer user', err);
     } finally {
@@ -305,11 +425,20 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
     setBranchFilter('');
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchUsers(currentPage);
+    setRefreshing(false);
+  };
+
   const activeFilterCount = [
     nameFilter !== '',
     emailFilter !== '',
     branchFilter !== '',
   ].filter(Boolean).length;
+
+  // The user whose name goes in the transfer modal header
+  const transferUser_ = users.find((u) => u.id === transferUserId);
 
   if (selectedUser) {
     return (
@@ -324,8 +453,8 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
 
   return (
     <div>
-      {/* Top bar: filter button (left) */}
-      <div className="flex items-center justify-between gap-3 mb-4">
+      {/* Top bar: filters + chips + refresh */}
+      <div className="flex items-center gap-3 mb-4">
         <Button
           variant="outline"
           size="sm"
@@ -340,7 +469,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
             </span>
           )}
         </Button>
-
         {/* Active filter chips */}
         <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {nameFilter && (
@@ -368,6 +496,16 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
             </span>
           )}
         </div>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+          title="Refresh users"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+        </Button>
       </div>
 
       {/* User list */}
@@ -382,9 +520,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((user, idx) => {
-            const isTransferMode        = transferUserId === user.id;
-            const isLoadingThisUser     = loadingUser === user.id;
-            const selectedTransferBranch = branches.find((b) => b.id === transferBranchId);
+            const isLoadingThisUser = loadingUser === user.id;
 
             return (
               <motion.div
@@ -398,7 +534,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
               >
                 <div
                   className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
-                  onClick={() => !isTransferMode && handleCardClick(user.id)}
+                  onClick={() => handleCardClick(user.id)}
                 >
                   {/* Left: avatar + info */}
                   <div className="flex items-center gap-3 min-w-0">
@@ -436,12 +572,17 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                       <span className="text-xs text-muted-foreground animate-pulse">…</span>
                     )}
 
-                    {isSuperAdmin && !isTransferMode && branches.length > 0 && (
+                    {/* Transfer button — opens modal */}
+                    {isSuperAdmin && branches.length > 0 && (
                       <Button
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-muted-foreground hover:text-primary"
-                        onClick={() => { setTransferUserId(user.id); setTransferBranchId(null); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTransferUserId(user.id);
+                          setTransferBranchId(null);
+                        }}
                         title="Transfer branch"
                       >
                         <ArrowRightLeft className="h-3.5 w-3.5" />
@@ -459,82 +600,13 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteConfirm(user.id)}
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(user.id); }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>
                 </div>
-
-                {/* ── Transfer panel ── */}
-                <AnimatePresence>
-                  {isTransferMode && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.18 }}
-                      className="overflow-hidden border-t border-border"
-                    >
-                      <div className="px-4 py-3 space-y-2.5">
-                        <p className="text-xs font-medium text-foreground">
-                          Transfer <span className="text-primary">{user.fullName}</span> to:
-                        </p>
-                        <div className="relative" ref={transferDropdownRef}>
-                          <button
-                            type="button"
-                            onClick={() => setTransferDropdownOpen(!transferDropdownOpen)}
-                            className="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
-                          >
-                            <span className={selectedTransferBranch ? 'text-foreground' : 'text-muted-foreground'}>
-                              {selectedTransferBranch ? selectedTransferBranch.displayName : 'Choose branch…'}
-                            </span>
-                            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${transferDropdownOpen ? 'rotate-180' : ''}`} />
-                          </button>
-                          <AnimatePresence>
-                            {transferDropdownOpen && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                transition={{ duration: 0.12 }}
-                                className="absolute z-50 w-full mt-1 rounded-lg border border-border bg-card shadow-lg max-h-40 overflow-auto"
-                              >
-                                {branches.map((b) => (
-                                  <button
-                                    key={b.id}
-                                    type="button"
-                                    onClick={() => { setTransferBranchId(b.id); setTransferDropdownOpen(false); }}
-                                    className="relative flex w-full items-center px-3 py-2 text-sm text-foreground hover:bg-muted/60 transition-colors"
-                                  >
-                                    <span className="flex-1 text-left">{b.displayName}</span>
-                                    {transferBranchId === b.id && <Check className="h-3.5 w-3.5 text-primary" />}
-                                  </button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline" size="sm" className="flex-1"
-                            onClick={() => { setTransferUserId(null); setTransferBranchId(null); }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            size="sm" className="flex-1"
-                            disabled={!transferBranchId || transferring}
-                            onClick={handleTransfer}
-                          >
-                            {transferring ? 'Moving…' : 'Confirm'}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </motion.div>
             );
           })}
@@ -567,6 +639,18 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
         isSuperAdmin={isSuperAdmin}
         onApply={handleApplyFilters}
         onClear={handleClearFilters}
+      />
+
+      {/* Transfer Branch Modal — scrollable, shows all branches */}
+      <TransferBranchModal
+        open={transferUserId !== null}
+        userName={transferUser_?.fullName ?? ''}
+        branches={branches}
+        selectedBranchId={transferBranchId}
+        transferring={transferring}
+        onSelect={(id) => setTransferBranchId(id)}
+        onConfirm={handleTransfer}
+        onCancel={() => { setTransferUserId(null); setTransferBranchId(null); }}
       />
     </div>
   );
