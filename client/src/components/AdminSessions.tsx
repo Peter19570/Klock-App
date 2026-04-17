@@ -2,13 +2,14 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
-  Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw,
+  Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/services/api";
+import { exportSessions } from "@/services/sessionService";
 import type { ApiResponse, PageResponse, SessionResponse, ClockEventResponse } from "@/types";
 
 function formatDate(dateStr: string) {
@@ -134,6 +135,127 @@ function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear 
   );
 }
 
+// ─── Export Modal ─────────────────────────────────────────────────────────────
+
+interface ExportModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+function ExportModal({ open, onClose }: ExportModalProps) {
+  const [startDate, setStartDate] = React.useState("");
+  const [endDate, setEndDate]     = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
+  const [error, setError]         = React.useState("");
+
+  React.useEffect(() => {
+    if (open) { setStartDate(""); setEndDate(""); setError(""); }
+  }, [open]);
+
+  const handleExport = async () => {
+    setError("");
+    setExporting(true);
+    try {
+      const res = await exportSessions(startDate || undefined, endDate || undefined);
+      // Build a filename like: sessions_2024-01-01_2024-01-31.csv
+      const from = startDate || "all";
+      const to   = endDate   || "all";
+      const filename = `sessions_${from}_${to}.csv`;
+
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+      const a   = document.createElement("a");
+      a.href    = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      onClose();
+    } catch (err) {
+      console.error("Export failed", err);
+      setError("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Download className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Export Session History</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} disabled={exporting}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-4">
+              Select a date range to export. Leave both blank to export all sessions.
+            </p>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Start Date</Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-9 text-sm"
+                  disabled={exporting}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">End Date</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-9 text-sm"
+                  disabled={exporting}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <p className="mt-3 text-xs text-destructive">{error}</p>
+            )}
+
+            <div className="flex gap-2.5 mt-5">
+              <Button variant="outline" className="flex-1 h-9 text-sm" onClick={onClose} disabled={exporting}>
+                Cancel
+              </Button>
+              <Button className="flex-1 h-9 text-sm gap-1.5" onClick={handleExport} disabled={exporting}>
+                {exporting ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Exporting…</>
+                ) : (
+                  <><Download className="h-3.5 w-3.5" /> Export CSV</>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Movement row ─────────────────────────────────────────────────────────────
 
 function MovementRow({ movement }: { movement: ClockEventResponse }) {
@@ -205,7 +327,7 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
           {/* Icon */}
           <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isActive ? "bg-emerald-500/15" : "bg-primary/10"}`}>
             {isActive ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <Clock className="w-3.5 h-3.5 text-emerald-500" />
             ) : (
               <CalendarDays className="w-3.5 h-3.5 text-primary" />
             )}
@@ -284,8 +406,9 @@ export default function AdminSessions() {
   const [minDate, setMinDate] = React.useState("");
   const [maxDate, setMaxDate] = React.useState("");
 
-  // Filter modal
+  // Modals
   const [filterOpen, setFilterOpen] = React.useState(false);
+  const [exportOpen, setExportOpen] = React.useState(false);
 
   const fetchSessions = React.useCallback(async (page: number) => {
     setLoading(true);
@@ -336,6 +459,17 @@ export default function AdminSessions() {
               {activeFilterCount}
             </span>
           )}
+        </Button>
+
+        {/* Export CSV button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2 h-9 shadow-sm shrink-0"
+          onClick={() => setExportOpen(true)}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
         </Button>
 
         {/* Active filter chips */}
@@ -410,6 +544,12 @@ export default function AdminSessions() {
         maxDate={maxDate}
         onApply={(min, max) => { setMinDate(min); setMaxDate(max); }}
         onClear={() => { setMinDate(''); setMaxDate(''); }}
+      />
+
+      {/* Export Modal */}
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
       />
     </div>
   );

@@ -59,6 +59,21 @@ export const getAdminSessions = (params: GetAdminSessionsParams = {}) =>
     { params },
   );
 
+/**
+ * GET /api/v1/sessions/export
+ * Downloads a CSV of sessions filtered by date range.
+ * @param start yyyy-MM-dd (optional)
+ * @param end   yyyy-MM-dd (optional)
+ */
+export const exportSessions = (start?: string, end?: string) =>
+  api.get('/api/v1/sessions/export', {
+    params: {
+      ...(start && { start }),
+      ...(end && { end }),
+    },
+    responseType: 'blob',
+  });
+
 // ─── Clock actions ────────────────────────────────────────────────────────────
 
 /**
