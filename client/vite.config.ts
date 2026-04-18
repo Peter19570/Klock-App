@@ -22,4 +22,8 @@ export default defineConfig({
       'sandier-unpsychically-rickie.ngrok-free.dev'
     ]
   },
+  build: {
+  outDir: '../src/main/resources/static',
+  emptyOutDir: true,
+}
 });
