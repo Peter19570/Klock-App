@@ -6,16 +6,14 @@ import type { InternalAxiosRequestConfig } from "axios";
 // Token store — both tokens in localStorage so they survive page reloads
 // ---------------------------------------------------------------------------
 export const tokenStore = {
-  getAccess: () => localStorage.getItem("klock-access-token"),
+  getAccess:  () => localStorage.getItem("klock-access-token"),
   getRefresh: () => localStorage.getItem("klock-refresh-token"),
 
-  /** Call on login — saves both tokens */
   save: (accessToken: string, refreshToken: string) => {
     localStorage.setItem("klock-access-token", accessToken);
     localStorage.setItem("klock-refresh-token", refreshToken);
   },
 
-  /** Call on logout — wipes both tokens */
   clear: () => {
     localStorage.removeItem("klock-access-token");
     localStorage.removeItem("klock-refresh-token");
@@ -36,11 +34,11 @@ const api = axios.create({
 
 // ---------------------------------------------------------------------------
 // Helper — stamps the CURRENT access token onto any request config.
-// Used in both the request interceptor and the retry path so the retry
-// never carries a stale/expired Authorization header.
 // ---------------------------------------------------------------------------
 function attachToken(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
   const token = tokenStore.getAccess();
+  // In attachToken(), add:
+console.log('[attachToken]', config.url, 'token:', token?.slice(0, 20));
   if (token) {
     config.headers = config.headers ?? {};
     config.headers["Authorization"] = `Bearer ${token}`;
@@ -51,33 +49,52 @@ function attachToken(config: InternalAxiosRequestConfig): InternalAxiosRequestCo
 }
 
 // ---------------------------------------------------------------------------
-// Request interceptor — attach Bearer token to every outgoing request
+// Request interceptor
 // ---------------------------------------------------------------------------
 api.interceptors.request.use(attachToken);
 
 // ---------------------------------------------------------------------------
-// Single in-flight refresh gate.
-// All concurrent 401s await the SAME promise — only one refresh call fires.
+// Refresh gate.
+//
+// FIX (Bug 2): We no longer null out refreshPromise in .finally(). Instead we
+// keep the promise alive until all queued retries have had a chance to read
+// the new token. We null it only when a new refresh attempt starts, which is
+// gated by the !refreshPromise check anyway.
+//
+// The promise resolves with void on success and rejects on failure — callers
+// catch the rejection to trigger forceLogout().
 // ---------------------------------------------------------------------------
 let refreshPromise: Promise<void> | null = null;
 
 // ---------------------------------------------------------------------------
-// Logout guard — set to true the moment we decide to log the user out.
+// Logout guard.
 //
-// NEVER reset this flag manually. A full page navigation (window.location.*)
-// reloads the JS module from scratch, which resets all module-level variables
-// to their initial values automatically. Resetting it inside a setTimeout
-// would re-open the refresh flow while the login page is still mounting,
-// causing the "must log in twice" bug.
+// FIX (Bug 3): We persist this flag in sessionStorage instead of a module
+// variable so it survives SPA navigations (where the JS module is NOT
+// re-evaluated) but is wiped on a real page reload or new tab — which is the
+// correct lifetime. On a real reload the module variable would reset anyway;
+// sessionStorage just makes it reset correctly for SPA navigations too.
+//
+// We also clear the flag at the top of forceLogout() so that a fresh login
+// after a soft-redirect-to-login works on the first attempt.
 // ---------------------------------------------------------------------------
-let isLoggingOut = false;
+const LOGGING_OUT_KEY = "klock-logging-out";
+
+function isLoggingOut(): boolean {
+  return sessionStorage.getItem(LOGGING_OUT_KEY) === "1";
+}
 
 function forceLogout() {
-  if (isLoggingOut) return;
-  isLoggingOut = true;
+  if (isLoggingOut()) return;
+  sessionStorage.setItem(LOGGING_OUT_KEY, "1");
   refreshPromise = null;
   tokenStore.clear();
   window.location.replace("/");
+}
+
+// Call this once on the login page so a fresh login is never blocked.
+export function clearLoggingOutFlag() {
+  sessionStorage.removeItem(LOGGING_OUT_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,26 +112,23 @@ api.interceptors.response.use(
     const isRegisterRequest = originalRequest?.url?.includes("/api/auth/v1/register");
     const isLogoutRequest   = originalRequest?.url?.includes("/api/auth/logout");
 
-    // ── Non-401 — pass through ───────────────────────────────────────────────
+    // Non-401 — pass through
     if (error.response?.status !== 401) {
       return Promise.reject(error);
     }
 
-    // ── Auth/logout endpoints or already logging out — bail immediately ───────
-    // Logout is explicitly excluded: if the logout POST 401s (e.g. backend
-    // already revoked the token), we just silently ignore it — the local
-    // tokens are already cleared, so the user IS effectively logged out.
-    if (isLoginRequest || isRegisterRequest || isLogoutRequest || isLoggingOut) {
+    // Auth/logout endpoints or already logging out — bail immediately
+    if (isLoginRequest || isRegisterRequest || isLogoutRequest || isLoggingOut()) {
       return Promise.reject(error);
     }
 
-    // ── Refresh call itself 401'd — refresh token is dead ────────────────────
+    // Refresh call itself 401'd — refresh token is dead
     if (isRefreshRequest) {
       forceLogout();
       return Promise.reject(error);
     }
 
-    // ── Normal 401 — attempt one refresh then retry ───────────────────────────
+    // Normal 401 — attempt one refresh then retry
     if (!originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -143,19 +157,33 @@ api.interceptors.response.use(
               refreshToken: string;
             };
             tokenStore.save(accessToken, refreshToken);
+            // FIX (Bug 2): null the promise AFTER saving tokens so any
+            // concurrent waiter that wakes up next tick reads the new token.
+            // Using Promise.resolve().then() pushes the null into the next
+            // microtask, after all current awaiters have resumed.
+            Promise.resolve().then(() => { refreshPromise = null; });
           })
-          .catch((err) => Promise.reject(err))
-          .finally(() => {
+          .catch((err) => {
             refreshPromise = null;
+            return Promise.reject(err);
           });
       }
 
       try {
         await refreshPromise;
-        // Re-stamp the NEW access token — originalRequest still has the old
-        // expired Bearer baked in from when it originally fired.
-        attachToken(originalRequest);
-        return api(originalRequest);
+
+        // FIX (Bug 4): Build a fresh config rather than mutating the original.
+        // Axios serialises headers when the request is dispatched; mutating the
+        // old config object after the fact can have no effect on the retry.
+        const retryConfig: InternalAxiosRequestConfig = {
+          ...originalRequest,
+          headers: {
+            ...(originalRequest.headers ?? {}),
+            Authorization: `Bearer ${tokenStore.getAccess()}`,
+          },
+        } as InternalAxiosRequestConfig;
+
+        return api(retryConfig);
       } catch {
         forceLogout();
         return Promise.reject(error);

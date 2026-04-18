@@ -1,6 +1,5 @@
 import * as React from "react";
-import api from "@/services/api";
-import { tokenStore } from "@/services/api";
+import api, { tokenStore, clearLoggingOutFlag } from "@/services/api";
 import type { UserDetailResponse, AuthRequest } from "@/types";
 
 interface AuthContextValue {
@@ -18,8 +17,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
 
   // ── fetchUser ──────────────────────────────────────────────────────────────
-  // Plain profile fetch. Does NOT touch tokens — token lifecycle is owned
-  // exclusively by login() / logout() / the api.ts interceptor.
   const fetchUser = React.useCallback(async (): Promise<UserDetailResponse | null> => {
     try {
       const res = await api.get<{ data: UserDetailResponse }>("/api/v1/users/me");
@@ -35,15 +32,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Session restore on mount ───────────────────────────────────────────────
-  // Only runs when NOT on the login page, and only when BOTH tokens exist.
-  // Never runs concurrently with login() — the login page short-circuits here.
+  // FIX (Bug 1): Instead of relying on window.location.pathname (which is
+  // fragile — query strings, hash routes, and trailing slashes all break the
+  // equality check), we look at whether BOTH tokens exist. If they do, we
+  // attempt to restore the session regardless of the current route. If the
+  // access token is expired, the Axios interceptor will silently refresh it
+  // before /users/me fires, so the user stays logged in. If both tokens are
+  // absent we just stop loading — the router's protected-route guards handle
+  // the redirect to login.
+  //
+  // We also call clearLoggingOutFlag() here so that a user who was force-
+  // logged-out and lands back on the login page can log in again on the first
+  // attempt. Without this, the sessionStorage flag from forceLogout() would
+  // block every subsequent request.
   React.useEffect(() => {
-    const onLoginPage = window.location.pathname === "/";
-
-    if (onLoginPage) {
-      setLoading(false);
-      return;
-    }
+    clearLoggingOutFlag();
 
     const hasAccess  = Boolean(tokenStore.getAccess());
     const hasRefresh = Boolean(tokenStore.getRefresh());
@@ -54,7 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tokenStore.clear();
       setLoading(false);
     }
-  }, [fetchUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once on mount only
 
   // ── Redirect after login ───────────────────────────────────────────────────
   const handleHardRedirect = (userData: UserDetailResponse) => {
@@ -85,18 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // ── logout ─────────────────────────────────────────────────────────────────
-  // ORDER MATTERS:
-  //   1. Tell the backend to revoke the refresh token FIRST — while the
-  //      access token is still in localStorage so the request goes out
-  //      with a valid Authorization header.
-  //   2. Clear tokens locally AFTER the request completes (or fails).
-  //   3. Redirect.
-  //
-  // Previously tokens were cleared before the POST, so the logout request
-  // went out with no Authorization header. If the backend requires auth on
-  // /logout it would 401, hit the interceptor, find no refresh token, and
-  // call forceLogout() — setting isLoggingOut=true and poisoning the next
-  // login attempt.
   const logout = async () => {
     const refreshToken = tokenStore.getRefresh();
     setUser(null);
@@ -106,9 +98,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await api.post("/api/auth/logout", { refreshToken });
       }
     } catch (err) {
-      // Silently ignore — backend may have already revoked the token.
-      // The interceptor's isLogoutRequest guard ensures a 401 here does
-      // NOT trigger forceLogout() or corrupt the next login session.
       console.warn("Logout request failed (token may already be revoked):", err);
     } finally {
       tokenStore.clear();
