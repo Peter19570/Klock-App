@@ -7,6 +7,7 @@ import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.enums.UserRole;
 import com.example.klockapp.exception.custom.AccessDeniedException;
 import com.example.klockapp.exception.custom.NotFoundException;
+import com.example.klockapp.exception.custom.PasswordNotChangedException;
 import com.example.klockapp.filter.UserFilter;
 import com.example.klockapp.mapper.UserMapper;
 import com.example.klockapp.model.Branch;
@@ -43,9 +44,9 @@ public class UserService {
         User user = userRepo.findById(principal.user().getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-//        if (true == user.getMustChangePassword()){
-//            throw new PasswordNotChangedException("Please change password");
-//        }
+        if (true == user.getMustChangePassword()){
+            throw new PasswordNotChangedException("Please change password");
+        }
 
         return userMapper.toDetailDto(user);
     }
