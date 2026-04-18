@@ -4,6 +4,7 @@ import com.example.klockapp.config.security.jwt.JwtService;
 import com.example.klockapp.dto.internal.CustomUserPrincipal;
 import com.example.klockapp.dto.request.AuthRequest;
 import com.example.klockapp.dto.request.PasswordRequest;
+import com.example.klockapp.dto.request.RefreshTokenRequest;
 import com.example.klockapp.dto.response.AuthResponse;
 import com.example.klockapp.exception.custom.*;
 import com.example.klockapp.model.Token;
@@ -51,22 +52,29 @@ public class AuthService {
         return new AuthResponse(accessToken, refreshToken);
     }
 
-    public void logout(HttpServletRequest request, HttpServletResponse response) {
-        clearCookie(response, "accessToken", "/");
-        clearCookie(response, "refreshToken", "/api/auth/");
+//    public void logout(HttpServletRequest request, HttpServletResponse response) {
+//        clearCookie(response, "accessToken", "/");
+//        clearCookie(response, "refreshToken", "/api/auth/");
+//
+//        // 3. Revoke in DB
+//        Cookie[] cookies = request.getCookies();
+//        if (cookies != null) {
+//            for (Cookie cookie : cookies) {
+//                if ("refreshToken".equals(cookie.getName())) {
+//                    tokenRepo.findByToken(cookie.getValue()).ifPresent(t -> {
+//                        t.setRevoked(true);
+//                        tokenRepo.save(t);
+//                    });
+//                }
+//            }
+//        }
+//    }
 
-        // 3. Revoke in DB
-        Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if ("refreshToken".equals(cookie.getName())) {
-                    tokenRepo.findByToken(cookie.getValue()).ifPresent(t -> {
-                        t.setRevoked(true);
-                        tokenRepo.save(t);
-                    });
-                }
-            }
-        }
+    public void logout(RefreshTokenRequest request){
+        Token token = tokenRepo.findByToken(request.refreshToken())
+                .orElseThrow(() -> new NotFoundException("Token not found"));
+
+        tokenRepo.delete(token);
     }
 
     private void clearCookie(HttpServletResponse response, String name, String path) {
@@ -77,19 +85,20 @@ public class AuthService {
         response.addCookie(cookie);
     }
 
-    public AuthResponse refresh(HttpServletRequest request){
-        Cookie[] cookies = request.getCookies();
-
-        String oldRefreshToken = null;
-
-        if (cookies != null){
-            for (Cookie cookie : cookies){
-                if ("refreshToken".equals(cookie.getName())){
-                    oldRefreshToken = cookie.getValue();
-                    break;
-                }
-            }
-        }
+    public AuthResponse refresh(RefreshTokenRequest request){
+//        Cookie[] cookies = request.getCookies();
+//
+//        String oldRefreshToken = null;
+//
+//        if (cookies != null){
+//            for (Cookie cookie : cookies){
+//                if ("refreshToken".equals(cookie.getName())){
+//                    oldRefreshToken = cookie.getValue();
+//                    break;
+//                }
+//            }
+//        }
+        String oldRefreshToken = request.refreshToken();
 
         String username = jwtService.extractUsername(oldRefreshToken);
 
