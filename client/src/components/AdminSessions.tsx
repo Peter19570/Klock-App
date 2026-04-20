@@ -442,66 +442,103 @@ export default function AdminSessions() {
 
   const activeFilterCount = [minDate !== '', maxDate !== ''].filter(Boolean).length;
 
+  const handleTodayFilter = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setMinDate(today);
+    setMaxDate(today);
+  };
+
+  const isTodayActive = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return minDate === today && maxDate === today;
+  })();
+
   return (
     <div>
       {/* Filter bar */}
-      <div className="flex items-center gap-3 mb-4">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2 h-9 shadow-sm shrink-0"
-          onClick={() => setFilterOpen(true)}
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-              {activeFilterCount}
-            </span>
-          )}
-        </Button>
+      <div className="flex flex-col gap-2 mb-4">
+        {/* Row 1: action buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 h-9 shadow-sm shrink-0"
+            onClick={() => setFilterOpen(true)}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
 
-        {/* Export CSV button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-2 h-9 shadow-sm shrink-0"
-          onClick={() => setExportOpen(true)}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export CSV
-        </Button>
+          <Button
+            variant={isTodayActive ? "default" : "outline"}
+            size="sm"
+            className="flex items-center gap-2 h-9 shadow-sm shrink-0"
+            onClick={isTodayActive ? () => { setMinDate(''); setMaxDate(''); } : handleTodayFilter}
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            Today
+          </Button>
 
-        {/* Active filter chips */}
-        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-          {minDate && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
-              From: {minDate}
-              <button onClick={() => setMinDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-          {maxDate && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
-              To: {maxDate}
-              <button onClick={() => setMaxDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Export: icon-only on mobile, full label on sm+ */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 sm:hidden shadow-sm shrink-0"
+              onClick={() => setExportOpen(true)}
+              title="Export CSV"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden sm:flex items-center gap-2 h-9 shadow-sm shrink-0"
+              onClick={() => setExportOpen(true)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              title="Refresh sessions"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          title="Refresh sessions"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-        </Button>
+        {/* Row 2: active filter chips — only shown when filters are set */}
+        {(minDate || maxDate) && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {minDate && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                From: {minDate}
+                <button onClick={() => setMinDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {maxDate && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                To: {maxDate}
+                <button onClick={() => setMaxDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Cards */}

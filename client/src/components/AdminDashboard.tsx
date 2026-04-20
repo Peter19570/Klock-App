@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AdminMap } from './AdminMap';
 import AdminUsers from './AdminUsers';
 import AdminSessions from './AdminSessions';
+import AdminOverview from './AdminOverview';
 import LocationSettings from './LocationSettings';
 import CreateAdminModal from './CreateAdminModal';
 import { Button } from './ui/button';
@@ -31,7 +32,7 @@ import {
 } from '../services/branchService';
 import type { BranchResponse, BranchRequest, BranchDetailsResponse } from '../types';
 
-type TabId = 'dashboard' | 'users' | 'sessions' | 'branch' | 'branches';
+type TabId = 'overview' | 'dashboard' | 'users' | 'sessions' | 'branch' | 'branches';
 
 interface BranchFormState {
   displayName: string;
@@ -297,8 +298,8 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
       ) : null}
 
       {/* Branch Settings + Map */}
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
-        <div className="w-full xl:flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <div className="flex flex-col">
           <LocationSettings
             branchId={branch.id}
             isLockedForCurrentUser={false}
@@ -306,9 +307,11 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
             onSaved={onSaved}
           />
         </div>
-        <div className="w-full xl:flex-1 rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
           <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {branch.displayName}</h3>
-          <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
+          <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
+            <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
+          </div>
         </div>
       </div>
 
@@ -331,11 +334,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
                 {details.assignedStaff.length}
               </span>
               {staffTab === 'assigned' && (
-                <motion.div
-                  layoutId="branch-staff-tab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
               )}
             </button>
             <button
@@ -352,72 +351,54 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
                 {details.activeNow.length}
               </span>
               {staffTab === 'active' && (
-                <motion.div
-                  layoutId="branch-staff-tab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500"
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
               )}
             </button>
           </div>
 
           {/* Tab content */}
           <div className="p-4">
-            <AnimatePresence mode="wait">
-              {staffTab === 'assigned' ? (
-                <motion.div
-                  key="assigned"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {details.assignedStaff.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No assigned staff.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {details.assignedStaff.map((u) => (
-                        <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
-                          <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                            {u.fullName?.charAt(0) ?? '?'}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
-                            <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
-                          </div>
+            {staffTab === 'assigned' ? (
+              <div>
+                {details.assignedStaff.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No assigned staff.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {details.assignedStaff.map((u) => (
+                      <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {u.fullName?.charAt(0) ?? '?'}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="active"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {details.activeNow.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No one is currently active.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {details.activeNow.map((u) => (
-                        <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
-                          <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
-                            {u.fullName?.charAt(0) ?? '?'}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
-                            <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
-                          </div>
+                        <div className="min-w-0">
+                          <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                          <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {details.activeNow.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No one is currently active.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {details.activeNow.map((u) => (
+                      <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                        <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
+                          {u.fullName?.charAt(0) ?? '?'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                          <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -441,13 +422,181 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
   );
 }
 
+// ── Admin Branch View (ADMIN role) ───────────────────────────────────────────
+interface AdminBranchViewProps {
+  adminBranch: BranchResponse | null;
+  adminBranchLoading: boolean;
+  liveRadius: number | null;
+  setLiveRadius: (r: number | null) => void;
+  mapExpanded: boolean;
+  setMapExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  fetchAdminBranch: () => Promise<void>;
+}
+
+function AdminBranchView({
+  adminBranch,
+  adminBranchLoading,
+  liveRadius,
+  setLiveRadius,
+  mapExpanded,
+  setMapExpanded,
+  fetchAdminBranch,
+}: AdminBranchViewProps) {
+  const [details, setDetails] = useState<BranchDetailsResponse | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [staffTab, setStaffTab] = useState<StaffTab>('assigned');
+
+  useEffect(() => {
+    if (!adminBranch) return;
+    setLoadingDetails(true);
+    getBranchDetails(adminBranch.id)
+      .then((res) => setDetails(res.data.data))
+      .catch(() => {/* silently fail — staff sections just won't render */})
+      .finally(() => setLoadingDetails(false));
+  }, [adminBranch?.id]);
+
+  if (adminBranchLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!adminBranch) {
+    return (
+      <div className="text-sm text-muted-foreground text-center py-12">
+        No branch assigned. Contact your Super Admin.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Settings + Map side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+        <div className="flex flex-col">
+          <LocationSettings
+            branchId={adminBranch.id}
+            isLockedForCurrentUser={adminBranch.isLocked}
+            hideCoordinates
+            onRadiusChange={(r) => setLiveRadius(r)}
+            onSaved={fetchAdminBranch}
+          />
+        </div>
+        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
+          <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {adminBranch.displayName}</h3>
+          <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
+            <AdminMap
+              branches={[{ ...adminBranch, radius: liveRadius ?? adminBranch.radius }]}
+              liveUsers={new Map()}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Assigned Staff + Active Now */}
+      {loadingDetails ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : details && (
+        <div className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] overflow-hidden">
+          {/* Tab buttons */}
+          <div className="flex border-b border-border">
+            <button
+              onClick={() => setStaffTab('assigned')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${
+                staffTab === 'assigned' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Users2 className="h-4 w-4" />
+              Assigned Staff
+              <span className={`inline-flex items-center justify-center h-4.5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${
+                staffTab === 'assigned' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}>
+                {details.assignedStaff.length}
+              </span>
+              {staffTab === 'assigned' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setStaffTab('active')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${
+                staffTab === 'active' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Active Now
+              <span className={`inline-flex items-center justify-center h-4.5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${
+                staffTab === 'active' ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground'
+              }`}>
+                {details.activeNow.length}
+              </span>
+              {staffTab === 'active' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
+              )}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="p-4">
+            {staffTab === 'assigned' ? (
+              <div>
+                {details.assignedStaff.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No assigned staff.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {details.assignedStaff.map((u) => (
+                      <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {u.fullName?.charAt(0) ?? '?'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                          <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {details.activeNow.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No one is currently active.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {details.activeNow.map((u) => (
+                      <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                        <div className="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">
+                          {u.fullName?.charAt(0) ?? '?'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                          <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export function AdminDashboard() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const toastRef = useRef<SplashedPushNotificationsHandle>(null);
-  const [activeTab, setActiveTab]     = useState<TabId>('dashboard');
+  const [activeTab, setActiveTab]     = useState<TabId>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
   const [mapFocusBranchId, setMapFocusBranchId] = useState<number | null>(null);
@@ -472,12 +621,13 @@ export function AdminDashboard() {
   const [visibleUserCount, setVisibleUserCount] = useState(0);
 
   const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'overview',  label: 'Overview',  icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'dashboard', label: 'Live Map',  icon: <MapPin className="w-4 h-4" /> },
     { id: 'users',     label: 'Users',     icon: <Users className="w-4 h-4" /> },
     { id: 'sessions',  label: 'Sessions',  icon: <Clock className="w-4 h-4" /> },
     isSuperAdmin
       ? { id: 'branches' as TabId, label: 'Branches', icon: <GitBranch className="w-4 h-4" /> }
-      : { id: 'branch'   as TabId, label: 'Branch',   icon: <MapPin className="w-4 h-4" /> },
+      : { id: 'branch'   as TabId, label: 'Branch',   icon: <GitBranch className="w-4 h-4" /> },
   ];
 
   const notify = useCallback((type: 'success' | 'error', msg: string) => {
@@ -679,7 +829,18 @@ export function AdminDashboard() {
             transition={{ duration: 0.2 }}
           >
 
-            {/* ── DASHBOARD ────────────────────────────────────────────────── */}
+            {/* ── OVERVIEW ─────────────────────────────────────────────────── */}
+            {activeTab === 'overview' && (
+              <AdminOverview
+                branches={branches}
+                liveUsers={liveUsers}
+                isSuperAdmin={isSuperAdmin}
+                adminBranch={adminBranch}
+                onNavigateToTab={(tab) => handleTabChange(tab as TabId)}
+              />
+            )}
+
+            {/* ── LIVE MAP ─────────────────────────────────────────────────── */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -838,49 +999,15 @@ export function AdminDashboard() {
 
             {/* ── BRANCH (ADMIN only) ──────────────────────────────────────── */}
             {activeTab === 'branch' && !isSuperAdmin && (
-              <div>
-                {adminBranchLoading ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : adminBranch ? (
-                  <div className="flex flex-col xl:flex-row gap-6 items-start">
-                    <div className="w-full xl:flex-1">
-                      <LocationSettings
-                        branchId={adminBranch.id}
-                        isLockedForCurrentUser={adminBranch.isLocked}
-                        onRadiusChange={(r) => setLiveRadius(r)}
-                        onSaved={fetchAdminBranch}
-                      />
-                    </div>
-                    <div className="w-full xl:flex-1 rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-foreground">Live radius preview — {adminBranch.displayName}</h3>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMapExpanded((v) => !v)}>
-                          {mapExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                        </Button>
-                      </div>
-                      <motion.div
-                        animate={{ height: mapExpanded ? 540 : 360 }}
-                        transition={{ duration: 0.3, ease: 'easeInOut' }}
-                        className="overflow-hidden rounded-xl"
-                      >
-                        <AdminMap
-                          branches={[{
-                            ...adminBranch,
-                            radius: liveRadius ?? adminBranch.radius,
-                          }]}
-                          liveUsers={new Map()}
-                        />
-                      </motion.div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground text-center py-12">
-                    No branch assigned. Contact your Super Admin.
-                  </div>
-                )}
-              </div>
+              <AdminBranchView
+                adminBranch={adminBranch}
+                adminBranchLoading={adminBranchLoading}
+                liveRadius={liveRadius}
+                setLiveRadius={setLiveRadius}
+                mapExpanded={mapExpanded}
+                setMapExpanded={setMapExpanded}
+                fetchAdminBranch={fetchAdminBranch}
+              />
             )}
 
             {/* ── BRANCHES (SUPER_ADMIN) ────────────────────────────────────── */}
