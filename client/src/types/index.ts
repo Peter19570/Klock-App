@@ -124,6 +124,8 @@ export interface ClockOutRequest {
 export interface GeoPosition {
   latitude: number;
   longitude: number;
+  /** Accuracy in metres — populated by useGeolocation, may be absent elsewhere */
+  accuracy?: number;
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
@@ -147,13 +149,21 @@ export interface ApiResponse<T> {
 
 // ─── WebSocket / Live Map ─────────────────────────────────────────────────────
 export interface AdminMapPayload {
-  userId: number;
+  /** May be absent on some backend versions — use email as the canonical key */
+  userId?: number;
   displayName: string;
   email: string;
   latitude: number;
   longitude: number;
-  sessionState: 'CLOCKED_IN' | 'CLOCKED_OUT';
-  branchId: number;
-  branchName: string;
+  /**
+   * The Java backend sends space-separated values: "CLOCKED IN" | "CLOCKED OUT"
+   * but may also send underscore variants.  resolveStatus() in useAdminWebSocket
+   * normalises both forms — keep the union loose so TypeScript doesn't reject
+   * the raw payload before normalisation.
+   */
+  sessionState: string;
+  /** May be absent for ADMIN-scoped payloads that don't include branch metadata */
+  branchId?: number;
+  branchName?: string;
   timeStamp: string;
 }

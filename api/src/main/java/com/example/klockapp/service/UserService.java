@@ -44,10 +44,6 @@ public class UserService {
         User user = userRepo.findById(principal.user().getId())
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        if (true == user.getMustChangePassword()){
-            throw new PasswordNotChangedException("Please change password");
-        }
-
         return userMapper.toDetailDto(user);
     }
 

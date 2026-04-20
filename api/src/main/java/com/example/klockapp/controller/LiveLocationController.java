@@ -6,6 +6,7 @@ import com.example.klockapp.service.LiveLocationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
@@ -18,7 +19,7 @@ public class LiveLocationController {
     private final LiveLocationService liveLocationService;
 
     @MessageMapping("/send-location")
-    public void broadcastLocation(Principal principal, LiveLocationRequest request){
+    public void broadcastLocation(@AuthenticationPrincipal Principal principal, LiveLocationRequest request){
         if (principal == null || request == null){
             return;
         }

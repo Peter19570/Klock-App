@@ -148,22 +148,18 @@ public class AttendanceService {
     public Page<SessionResponse> getAllSessions(
             CustomUserPrincipal principal, Pageable pageable, SessionFilter filter) {
 
-        UserRole role = principal.user().getRole(); // Assuming your principal exposes the enum [cite: 22]
+        UserRole role = principal.user().getRole();
 
+        // Check role before releasing the available sessions
         switch (role) {
             case USER -> {
-                // Force personal scope: Only see own sessions [cite: 33, 36]
                 filter.setUserId(principal.user().getId());
             }
             case ADMIN -> {
-                // Force branch scope: See all sessions at their managed branch [cite: 28, 29, 53]
-                // We clear any specific userId filter to ensure they see the whole branch
                 filter.setUserId(null);
                 filter.setBranchId(principal.user().getHomeBranch().getId());
             }
             case SUPER_ADMIN -> {
-                // Global scope: Do nothing, allow the filter to use whatever is passed [cite: 23, 27]
-                // They can optionally filter by a specific branch or user if they choose
             }
         }
 

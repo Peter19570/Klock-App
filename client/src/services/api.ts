@@ -38,7 +38,7 @@ const api = axios.create({
 function attachToken(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
   const token = tokenStore.getAccess();
   // In attachToken(), add:
-console.log('[attachToken]', config.url, 'token:', token?.slice(0, 20));
+// console.log('[attachToken]', config.url, 'token:', token?.slice(0, 20));
   if (token) {
     config.headers = config.headers ?? {};
     config.headers["Authorization"] = `Bearer ${token}`;

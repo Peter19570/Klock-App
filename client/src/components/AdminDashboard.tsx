@@ -469,6 +469,7 @@ export function AdminDashboard() {
   const [refreshingBranches, setRefreshingBranches] = useState(false);
 
   const { users: liveUsers } = useAdminWebSocket();
+  const [visibleUserCount, setVisibleUserCount] = useState(0);
 
   const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -507,12 +508,14 @@ export function AdminDashboard() {
       // Hardcode ID=0 as specified.
       const res = await getManagedBranch(0);
       const detail = res.data.data;
-      // Map BranchDetailsResponse → BranchResponse shape for map usage
+      // Map BranchDetailsResponse → BranchResponse shape for map usage.
+      // latitude/longitude are optional on BranchDetailsResponse — fall back to
+      // 0 so the map still renders instead of receiving NaN coordinates.
       setAdminBranch({
         id: detail.id,
         displayName: detail.displayName,
-        latitude: detail.latitude,
-        longitude: detail.longitude,
+        latitude: detail.latitude ?? 0,
+        longitude: detail.longitude ?? 0,
         radius: detail.radius,
         branchStatus: detail.branchStatus,
         isLocked: detail.branchStatus === 'LOCKED',
@@ -681,9 +684,10 @@ export function AdminDashboard() {
               <div className="space-y-6">
                 <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />Clocked in</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-300 inline-block" />Clocked out</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" />Clocked out</span>
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-400 inline-block" />Offline</span>
-                  <span className="ml-auto font-medium">{liveUsers.size} user{liveUsers.size !== 1 ? 's' : ''} tracked</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block" />Near perimeter</span>
+                  <span className="ml-auto font-medium">{visibleUserCount} user{visibleUserCount !== 1 ? 's' : ''} in perimeter</span>
                 </div>
 
                 {isSuperAdmin && branches.length > 0 && (
@@ -798,6 +802,7 @@ export function AdminDashboard() {
                         liveUsers={liveUsers}
                         focusBranchId={mapFocusBranchId}
                         onFocusConsumed={() => setMapFocusBranchId(null)}
+                        onVisibleCountChange={setVisibleUserCount}
                       />
                     ) : adminBranchLoading ? (
                       <div className="flex items-center justify-center h-full">

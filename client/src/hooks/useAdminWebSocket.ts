@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import type { AdminMapPayload } from "@/types";
+import { tokenStore } from "@/services/api";
 
 export type UserMapStatus = "clocked-in" | "clocked-out" | "offline";
 
@@ -22,6 +23,27 @@ function resolveStatus(sessionState: string | undefined | null): UserMapStatus {
   if (normalised === "CLOCKED_IN") return "clocked-in";
   if (normalised === "CLOCKED_OUT") return "clocked-out";
   return "offline";
+}
+
+/**
+ * Builds the SockJS URL with the Bearer token appended as a query parameter.
+ *
+ * WHY: SockJS performs a plain HTTP upgrade handshake before STOMP begins.
+ * Custom headers (like Authorization) are NOT sent during this HTTP phase —
+ * only the URL is. Spring Security validates the token at the upgrade level,
+ * so the token must travel on the URL.
+ *
+ * The backend's WebSocket security config should permit:
+ *   .requestMatchers("/ws/**").permitAll()   ← let Spring's WS token extractor handle it
+ * OR use a HandshakeInterceptor that reads the "token" query param.
+ *
+ * This is the industry-standard workaround for SockJS + JWT.
+ */
+function buildWsUrl(baseUrl: string): string {
+  const token = tokenStore.getAccess();
+  if (!token) return baseUrl;
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -48,9 +70,23 @@ export function useAdminWebSocket() {
     }
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(wsUrl),
+      // ── KEY FIX ──────────────────────────────────────────────────────────
+      // webSocketFactory is called fresh on every connect/reconnect attempt.
+      // We build the URL here (with the current token as a query param) so
+      // the SockJS HTTP handshake carries the token at the network level.
+      // beforeConnect still sets connectHeaders as a belt-and-suspenders for
+      // any STOMP-level auth the backend may also check.
+      webSocketFactory: () => new SockJS(buildWsUrl(wsUrl)),
       reconnectDelay: 5000,
+
+      beforeConnect: async () => {
+        const token = tokenStore.getAccess();
+        client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      },
+
       onConnect: () => {
+        console.log("[useAdminWebSocket] connected");
+
         client.subscribe("/topic/admin-map", (message) => {
           try {
             const payload: AdminMapPayload = JSON.parse(message.body);
@@ -60,14 +96,15 @@ export function useAdminWebSocket() {
 
               const status = resolveStatus(payload.sessionState);
 
-              const latitude =
-                typeof payload.latitude === "number"
-                  ? payload.latitude
-                  : parseFloat(payload.latitude as unknown as string);
-              const longitude =
-                typeof payload.longitude === "number"
-                  ? payload.longitude
-                  : parseFloat(payload.longitude as unknown as string);
+              // The backend's LiveLocationResponse declares latitude/longitude
+              // as String — always parseFloat regardless of what TS thinks.
+              const latitude = parseFloat(payload.latitude as unknown as string);
+              const longitude = parseFloat(payload.longitude as unknown as string);
+
+              if (isNaN(latitude) || isNaN(longitude)) {
+                console.warn("[useAdminWebSocket] received NaN coordinates, skipping", payload);
+                return prev;
+              }
 
               next.set(payload.email, {
                 ...payload,
@@ -150,7 +187,7 @@ export function useUserLocationBroadcast({
     const pos = positionRef.current;
     if (!pos) return;
 
-    // Send with space separator to match the Java record: "CLOCKED IN" / "CLOCKED OUT"
+    // Match exactly what the backend's getSessionState() returns: "CLOCKED IN" / "CLOCKED OUT"
     const payload = {
       email,
       latitude: pos.latitude,
@@ -165,6 +202,17 @@ export function useUserLocationBroadcast({
     });
   }, [email]);
 
+  // Send immediately when GPS position first resolves (or updates).
+  useEffect(() => {
+    if (!position) return;
+    sendLocation();
+  }, [position, sendLocation]);
+
+  // Re-send immediately when clock state changes.
+  useEffect(() => {
+    sendLocation();
+  }, [isClockedIn, sendLocation]);
+
   useEffect(() => {
     if (!email) return;
 
@@ -175,11 +223,21 @@ export function useUserLocationBroadcast({
     }
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(wsUrl),
+      // ── KEY FIX ──────────────────────────────────────────────────────────
+      // Same fix: build the URL with the token as a query param so the
+      // SockJS HTTP handshake is authenticated before STOMP begins.
+      webSocketFactory: () => new SockJS(buildWsUrl(wsUrl)),
       reconnectDelay: 5000,
+
+      beforeConnect: async () => {
+        const token = tokenStore.getAccess();
+        client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+      },
+
       onConnect: () => {
         connectedRef.current = true;
         sendLocation();
+        if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = setInterval(sendLocation, intervalMs);
       },
       onDisconnect: () => {

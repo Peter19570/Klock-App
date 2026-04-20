@@ -1,46 +1,83 @@
 import { useEffect, useRef } from 'react';
 import type { UserMapEntry } from '../hooks/useAdminWebSocket';
 import type { BranchResponse } from '../types';
+import { haversineDistance } from '../lib/utils';
 
 interface AdminMapProps {
   branches: BranchResponse[];
   liveUsers?: Map<string, UserMapEntry>;
   focusBranchId?: number | null;
   onFocusConsumed?: () => void;
+  /** Called whenever the set of visible (in-perimeter) users changes */
+  onVisibleCountChange?: (count: number) => void;
 }
 
 /**
- * Status → marker fill color
- *  clocked-in  → green  (CLOCKED_IN from WS)
- *  clocked-out → red    (CLOCKED_OUT from WS, recently disconnected)
- *  offline     → gray   (no WS signal)
+ * Buffer beyond branch.radius (metres) where user is still shown but orange.
+ * Outside radius + ORANGE_BUFFER_M → marker is hidden entirely.
+ */
+const ORANGE_BUFFER_M = 10;
+
+/**
+ * Status → marker fill color (within radius)
+ *  clocked-in  → green
+ *  clocked-out → red
+ *  offline     → gray
+ *
+ * Any status → orange when user is in the buffer zone (radius < dist <= radius + 10m)
  */
 const STATUS_COLOR: Record<string, string> = {
   'clocked-in':  '#22c55e',  // green-500
   'clocked-out': '#ef4444',  // red-500
   'offline':     '#9ca3af',  // gray-400
+  'buffer':      '#f97316',  // orange-500
 };
 
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6_371_000; // Earth radius in meters
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/** Returns true if the user's coordinates fall within any branch perimeter */
-function isWithinAnyBranch(
+/**
+ * Returns the zone classification for a user relative to a set of branches.
+ *
+ * SUPER_ADMIN passes all branches → user is visible if within any branch perimeter.
+ * ADMIN passes their single branch → user is visible only if within that branch.
+ *
+ * Returns:
+ *   'inside'  — within branch.radius of at least one branch
+ *   'buffer'  — within branch.radius + ORANGE_BUFFER_M but outside radius
+ *   'outside' — beyond every branch's buffer → hide marker
+ *
+ * Also returns the closest branch so we can label it in the tooltip.
+ */
+function classifyUser(
   lat: number,
   lng: number,
   branches: BranchResponse[],
-): boolean {
-  return branches.some(
-    (b) => haversineMeters(lat, lng, b.latitude, b.longitude) <= b.radius,
-  );
+): { zone: 'inside' | 'buffer' | 'outside'; branch: BranchResponse | null } {
+  if (branches.length === 0) return { zone: 'outside', branch: null };
+
+  let closestBranch: BranchResponse | null = null;
+  let closestDist = Infinity;
+  let bestZone: 'inside' | 'buffer' | 'outside' = 'outside';
+
+  for (const b of branches) {
+    const dist = haversineDistance(lat, lng, b.latitude, b.longitude);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closestBranch = b;
+    }
+    if (dist <= b.radius) {
+      // inside wins over everything
+      if (bestZone !== 'inside') {
+        bestZone = 'inside';
+        closestBranch = b;
+        closestDist = dist;
+      }
+    } else if (dist <= b.radius + ORANGE_BUFFER_M && bestZone === 'outside') {
+      bestZone = 'buffer';
+      closestBranch = b;
+      closestDist = dist;
+    }
+  }
+
+  return { zone: bestZone, branch: closestBranch };
 }
 
 function buildPersonIcon(L: typeof import('leaflet'), color: string): L.DivIcon {
@@ -65,10 +102,16 @@ function buildOfficeIcon(L: typeof import('leaflet')): L.DivIcon {
   return L.divIcon({ html: svg, className: '', iconSize: [24, 32], iconAnchor: [12, 32], tooltipAnchor: [12, -4] });
 }
 
-export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFocusConsumed }: AdminMapProps) {
+export function AdminMap({
+  branches,
+  liveUsers = new Map(),
+  focusBranchId,
+  onFocusConsumed,
+  onVisibleCountChange,
+}: AdminMapProps) {
   const mapRef           = useRef<HTMLDivElement>(null);
   const leafletMapRef    = useRef<L.Map | null>(null);
-  const branchMarkersRef = useRef<Map<number, { marker: L.Marker; circle: L.Circle }>>(new Map());
+  const branchMarkersRef = useRef<Map<number, { marker: L.Marker; circle: L.Circle; bufferCircle: L.Circle }>>(new Map());
   const userMarkersRef   = useRef<Map<string, L.Marker>>(new Map());
 
   const branchesRef = useRef(branches);
@@ -111,7 +154,12 @@ export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFoc
           const circle = L.circle(latlng, {
             color: '#f59e0b', fillColor: '#fbbf24', fillOpacity: 0.10, weight: 2, radius: b.radius,
           }).addTo(map);
-          branchMarkersRef.current.set(b.id, { marker, circle });
+          // Subtle dashed buffer ring — shows the 10m orange zone boundary
+          const bufferCircle = L.circle(latlng, {
+            color: '#f97316', fillColor: 'transparent', fillOpacity: 0,
+            weight: 1, dashArray: '4 4', radius: b.radius + ORANGE_BUFFER_M,
+          }).addTo(map);
+          branchMarkersRef.current.set(b.id, { marker, circle, bufferCircle });
         });
 
         if (branchesRef.current.length === 1) {
@@ -151,6 +199,8 @@ export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFoc
           existing.marker.setTooltipContent(`<strong>${b.displayName}</strong>`);
           existing.circle.setLatLng(latlng);
           existing.circle.setRadius(b.radius);
+          existing.bufferCircle.setLatLng(latlng);
+          existing.bufferCircle.setRadius(b.radius + ORANGE_BUFFER_M);
         } else {
           const marker = L.marker(latlng, { icon: buildOfficeIcon(L) })
             .addTo(map)
@@ -158,13 +208,17 @@ export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFoc
           const circle = L.circle(latlng, {
             color: '#f59e0b', fillColor: '#fbbf24', fillOpacity: 0.10, weight: 2, radius: b.radius,
           }).addTo(map);
-          branchMarkersRef.current.set(b.id, { marker, circle });
+          const bufferCircle = L.circle(latlng, {
+            color: '#f97316', fillColor: 'transparent', fillOpacity: 0,
+            weight: 1, dashArray: '4 4', radius: b.radius + ORANGE_BUFFER_M,
+          }).addTo(map);
+          branchMarkersRef.current.set(b.id, { marker, circle, bufferCircle });
         }
       });
 
-      branchMarkersRef.current.forEach(({ marker, circle }, id) => {
+      branchMarkersRef.current.forEach(({ marker, circle, bufferCircle }, id) => {
         if (!incoming.has(id)) {
-          marker.remove(); circle.remove();
+          marker.remove(); circle.remove(); bufferCircle.remove();
           branchMarkersRef.current.delete(id);
         }
       });
@@ -187,39 +241,62 @@ export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFoc
     onFocusConsumed?.();
   }, [focusBranchId, branches, onFocusConsumed]);
 
-  // ─── Sync live user markers (only within perimeter) ───────────────────────
+  // ─── Sync live user markers (with distance filtering) ────────────────────
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
 
     import('leaflet').then((L) => {
-      // Filter: only show users who are physically within a branch perimeter
-      const usersInPerimeter = new Map<string, UserMapEntry>();
-      liveUsers.forEach((user, email) => {
-        if (isWithinAnyBranch(user.latitude, user.longitude, branchesRef.current)) {
-          usersInPerimeter.set(email, user);
-        }
-      });
+      let visibleCount = 0;
 
-      usersInPerimeter.forEach((user, email) => {
+      liveUsers.forEach((user, email) => {
+        const { zone, branch: nearestBranch } = classifyUser(
+          user.latitude,
+          user.longitude,
+          branches,
+        );
+
+        // Outside every branch buffer → remove marker and skip
+        if (zone === 'outside') {
+          const existing = userMarkersRef.current.get(email);
+          if (existing) {
+            existing.remove();
+            userMarkersRef.current.delete(email);
+          }
+          return;
+        }
+
+        visibleCount++;
+
+        // Determine marker color: buffer zone overrides status color
+        const markerColor = zone === 'buffer'
+          ? STATUS_COLOR['buffer']
+          : (STATUS_COLOR[user.status] ?? STATUS_COLOR['offline']);
+
+        const icon = buildPersonIcon(L, markerColor);
         const latlng: [number, number] = [user.latitude, user.longitude];
-        const color  = STATUS_COLOR[user.status] ?? STATUS_COLOR['offline'];
-        const icon   = buildPersonIcon(L, color);
 
         const statusLabel =
           user.status === 'clocked-in'  ? 'Clocked In' :
           user.status === 'clocked-out' ? 'Clocked Out' :
           'Offline';
 
-        const branchLine = user.branchName
-          ? `<span style="color:#9ca3af;font-size:10px;">📍 ${user.branchName}</span><br/>`
+        const zoneLabel = zone === 'buffer'
+          ? `<span style="color:#f97316;font-size:10px;">⚠ Near perimeter</span><br/>`
+          : '';
+
+        // Show branch name from the nearest branch we matched (not from payload)
+        // so it's always accurate regardless of user's home branch assignment.
+        const branchLine = nearestBranch
+          ? `<span style="color:#9ca3af;font-size:10px;">📍 ${nearestBranch.displayName}</span><br/>`
           : '';
 
         const tooltipHtml = `
           <div style="font-family:sans-serif;font-size:12px;line-height:1.4;">
             <strong>${user.displayName || email}</strong><br/>
             ${branchLine}
-            <span style="color:${color};font-size:11px;">● ${statusLabel}</span>
+            ${zoneLabel}
+            <span style="color:${markerColor};font-size:11px;">● ${statusLabel}</span>
           </div>`;
 
         const existing = userMarkersRef.current.get(email);
@@ -234,15 +311,17 @@ export function AdminMap({ branches, liveUsers = new Map(), focusBranchId, onFoc
         }
       });
 
-      // Remove markers for users no longer in perimeter or disconnected
+      // Remove markers for users no longer being broadcast
       userMarkersRef.current.forEach((marker, email) => {
-        if (!usersInPerimeter.has(email)) {
+        if (!liveUsers.has(email)) {
           marker.remove();
           userMarkersRef.current.delete(email);
         }
       });
+
+      onVisibleCountChange?.(visibleCount);
     });
-  }, [liveUsers]);
+  }, [liveUsers, branches, onVisibleCountChange]);
 
   return (
     <div className="w-full h-full rounded-xl overflow-hidden border border-border">
