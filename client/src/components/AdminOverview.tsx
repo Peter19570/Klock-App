@@ -142,8 +142,8 @@ function SessionsChart({ bars, loading }: { bars: DayBar[]; loading: boolean }) 
     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Sessions — Last 7 Days</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Total sessions recorded per day</p>
+          <h3 className="text-sm font-semibold text-foreground">Sessions — This Week</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Mon – Fri · total sessions per day</p>
         </div>
         <TrendingUp className="h-4 w-4 text-primary" />
       </div>
@@ -366,16 +366,32 @@ export default function AdminOverview({
     ).then(() => setBranchDetails(new Map(map)));
   }, [branches, adminBranch, isSuperAdmin, refreshKey]);
 
-  // Fetch sessions for last 7 days — today count + chart + clock-out breakdown
+  // Fetch sessions for current Mon–Fri — today count + chart + clock-out breakdown
   React.useEffect(() => {
+    // Helper: yyyy-MM-dd from a local Date (avoids UTC offset shifting the date)
+    const toLocalDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
     const days: DayBar[] = [];
     const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
+
+    // Find Monday of the current week (week starts Monday)
+    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday);
+
+    // Build Mon–Fri slots using local dates
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
       days.push({
         label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-        date: d.toISOString().slice(0, 10),
+        date: toLocalDate(d),
         count: 0,
       });
     }
@@ -386,21 +402,21 @@ export default function AdminOverview({
     setLoadingChart(true);
     setLoadingToday(true);
 
-    // Fetch up to 200 sessions for 7 days — realistic ceiling
+    // Fetch up to 200 sessions for the week — realistic ceiling
     api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions/all', {
       params: { page: 0, size: 200, minWorkDate: minDate, maxWorkDate: maxDate },
     }).then((res) => {
       const sessions = res.data.data.content ?? [];
 
-      // Populate bars
+      // Populate bars — workDate from backend is already yyyy-MM-dd local date
       sessions.forEach((s) => {
         const bar = days.find((d) => d.date === s.workDate);
         if (bar) bar.count++;
       });
       setSessionBars([...days]);
 
-      // Today count
-      const today = now.toISOString().slice(0, 10);
+      // Today count using local date
+      const today = toLocalDate(now);
       setTodaySessions(sessions.filter((s) => s.workDate === today).length);
 
       // Clock-out breakdown

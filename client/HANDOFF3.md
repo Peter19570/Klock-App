@@ -25,6 +25,7 @@ src/
 │   ├── AdminDashboard.tsx          ← Tab-based: Dashboard / Users / Sessions / Branches
 │   ├── UserDashboard.tsx           ← ✅ UPDATED: branches[] replaces single officeLat/Lng; clockOutType fix
 │   ├── AllSessionsPage.tsx        ← Infinite scroll, user-facing
+    |-- AdminOverview 
     |-- UserSessionsPage.tsx        <- New
 │   ├── SessionHistory.tsx          ← Renders movements[] from WorkSession (SessionResponse)
 │   ├── AdminMap.tsx                ← ✅ UPDATED: branches[] prop; SUPER_ADMIN sees all branch pins + all users; ADMIN sees own branch pin + own users
