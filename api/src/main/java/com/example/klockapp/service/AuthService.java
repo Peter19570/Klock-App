@@ -7,9 +7,9 @@ import com.example.klockapp.dto.request.PasswordRequest;
 import com.example.klockapp.dto.request.RefreshTokenRequest;
 import com.example.klockapp.dto.response.AuthResponse;
 import com.example.klockapp.exception.custom.*;
-import com.example.klockapp.model.Token;
+import com.example.klockapp.model.RefreshToken;
 import com.example.klockapp.model.User;
-import com.example.klockapp.repo.TokenRepo;
+import com.example.klockapp.repo.RefreshTokenRepo;
 import com.example.klockapp.repo.UserRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,7 +28,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    private final TokenRepo tokenRepo;
+    private final RefreshTokenRepo tokenRepo;
 
 
     public AuthResponse login(AuthRequest request){
@@ -41,7 +41,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(principal);
         String refreshToken = jwtService.generateRefreshToken(principal);
 
-        Token newRefreshToken = new Token();
+        RefreshToken newRefreshToken = new RefreshToken();
         newRefreshToken.setToken(refreshToken);
         newRefreshToken.setUser(principal.user());
         tokenRepo.save(newRefreshToken);
@@ -50,7 +50,7 @@ public class AuthService {
     }
 
     public void logout(RefreshTokenRequest request){
-        Token token = tokenRepo.findByToken(request.refreshToken())
+        RefreshToken token = tokenRepo.findByTokenHash(request.refreshToken())
                 .orElseThrow(() -> new NotFoundException("Token not found"));
 
         tokenRepo.delete(token);
@@ -65,7 +65,7 @@ public class AuthService {
         User user = userRepo.findByEmail(username)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        Token token = tokenRepo.findByToken(oldRefreshToken)
+        RefreshToken token = tokenRepo.findByTokenHash(oldRefreshToken)
                 .orElseThrow(() -> new NotFoundException("Token not found"));
 
         CustomUserPrincipal principal = new CustomUserPrincipal(user, null);
@@ -84,7 +84,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(principal);
         String refreshToken = jwtService.generateRefreshToken(principal);
 
-        Token newRefreshToken = new Token();
+        RefreshToken newRefreshToken = new RefreshToken();
         newRefreshToken.setToken(refreshToken);
         newRefreshToken.setUser(principal.user());
         tokenRepo.save(newRefreshToken);

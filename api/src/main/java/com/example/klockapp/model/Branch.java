@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +32,12 @@ public class Branch extends BaseEntity {
     private Double radius; // Geofence in meters
 
     private Long autoClockOutDuration; // Minutes
+
+    @Column(nullable = false)
+    private LocalTime startShift;
+
+    @Column(nullable = false)
+    private LocalTime endShift;
 
     private BranchStatus branchStatus = BranchStatus.UNLOCKED; // Super Admin override
 

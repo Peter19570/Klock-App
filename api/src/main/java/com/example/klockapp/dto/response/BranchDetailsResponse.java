@@ -1,7 +1,10 @@
 package com.example.klockapp.dto.response;
 
 import com.example.klockapp.enums.BranchStatus;
+import jakarta.validation.constraints.NotNull;
 
+import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
 
 public record BranchDetailsResponse(
@@ -11,6 +14,8 @@ public record BranchDetailsResponse(
         BranchStatus branchStatus,
         Double latitude,
         Double longitude,
+        LocalTime startShift,
+        LocalTime endShift,
 
         // Summary Stats
         long totalAssignedStaff,

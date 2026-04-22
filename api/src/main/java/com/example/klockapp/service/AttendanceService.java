@@ -5,6 +5,7 @@ import com.example.klockapp.dto.request.ClockInRequest;
 import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
+import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.ClockOutType;
 import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.enums.UserRole;
@@ -36,6 +37,7 @@ import java.io.Writer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -52,21 +54,21 @@ public class AttendanceService {
 
     /**
      * Smart Clock-In Logic:
-     * 1. Iterates through branches to find a match[cite: 43].
+     * 1. Iterates through branches to find a match
      * 2. Enforces "No Double Clock-In" guardrail.
-     * 3. Manages WorkSession (Parent) and ClockEvent (Child)[cite: 46, 48].
+     * 3. Manages WorkSession (Parent) and ClockEvent (Child)
      */
     public ClockEventResponse clockIn(CustomUserPrincipal principal, ClockInRequest request)
             throws BadRequestException {
         User user = principal.user();
 
-        // Guardrail: Prohibit double clock-in across the system [cite: 50, 51]
+        // Guardrail: Prohibit double clock-in across the system
         if (clockEventRepo.existsByWorkSessionUserAndClockOutTimeIsNull(user)) {
             throw new
                     IllegalStateException("You must clock out of your current branch before clocking in elsewhere.");
         }
 
-        // Smart Discovery: Backend iterates through branches and matches radius [cite: 43, 44]
+        // Smart Discovery: Backend iterates through branches and matches radius
         Branch targetBranch = branchRepo.findAll().stream()
                 .filter(branch -> LocationUtility.isWithinRadius(
                         request.latitude(), request.longitude(),
@@ -76,17 +78,22 @@ public class AttendanceService {
                 .orElseThrow(() -> new
                         BadRequestException("You are not within the perimeter of any registered branch."));
 
-        // Workday Container: Find today's session or create the first one [cite: 46, 47]
+        if (LocalTime.now().isAfter(targetBranch.getEndShift())){
+            throw new IllegalStateException("Cannot not clock in at branch pasted their end-shift");
+        }
+
+        // Workday Container: Find today's session or create the first one
         WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), user)
                 .orElseGet(() -> {
                     WorkSession newSession = new WorkSession();
                     newSession.setWorkDate(LocalDate.now());
                     newSession.setUser(user);
                     newSession.setStatus(SessionStatus.ACTIVE);
+                    newSession.setArrivalStatus(getArrivalStatus(targetBranch));
                     return workSessionRepo.save(newSession);
                 });
 
-        // Create the individual Movement (ClockEvent) [cite: 48]
+        // Create the individual Movement (ClockEvent)
         ClockEvent event = clockEventMapper.toEntity(request);
         event.setWorkSession(session);
         event.setUser(user);
@@ -94,13 +101,28 @@ public class AttendanceService {
         event.setClockInTime(Instant.now());
 
         session.setStatus(SessionStatus.ACTIVE);
-
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
 
     /**
+     * Helper to get the arrival status of a session
+     * */
+    private ArrivalStatus getArrivalStatus(Branch branch) {
+        LocalTime start = branch.getStartShift();
+        LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
+
+        if (LocalTime.now().isBefore(start)) {
+            return ArrivalStatus.EARLY;
+        } else if (!LocalTime.now().isAfter(graceEnd)) {
+            return ArrivalStatus.ON_TIME;
+        } else {
+            return ArrivalStatus.LATE;
+        }
+    }
+
+    /**
      * Clock-Out Logic:
-     * Closes the active movement[cite: 9].
+     * Closes the active movement
      */
     public ClockEventResponse clockOut(CustomUserPrincipal principal, ClockOutRequest request) {
         ClockEvent activeEvent = clockEventRepo
@@ -109,17 +131,6 @@ public class AttendanceService {
 
         WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), principal.user())
                         .orElseThrow(() -> new NotFoundException("Work Session not found"));
-
-        Duration limit = Duration.ofMinutes(2);
-        Duration eventDiff = Duration.between(activeEvent.getClockInTime(),Instant.now());
-
-        // Check time diff btw the active clock and clock out to prevent recording accidental clock-ins
-        if (eventDiff.compareTo(limit) < 0){
-            clockEventRepo.delete(activeEvent);
-
-            session.setStatus(SessionStatus.COMPLETED);
-            return null;
-        }
 
         activeEvent.setClockOutTime(Instant.now());
         activeEvent.setClockOutType(request.clockOutType() != null ? request.clockOutType() : ClockOutType.MANUAL);
@@ -142,7 +153,7 @@ public class AttendanceService {
 
     /**
      * Personal History:
-     * Fetches WorkSessions with nested movements for the user[cite: 9, 36].
+     * Fetches WorkSessions with nested movements for the user
      */
     @Transactional(readOnly = true)
     public Page<SessionResponse> getAllSessions(

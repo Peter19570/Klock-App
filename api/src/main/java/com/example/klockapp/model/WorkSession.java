@@ -1,6 +1,7 @@
 package com.example.klockapp.model;
 
 import com.example.klockapp.common.BaseEntity;
+import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.SessionStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -20,6 +21,8 @@ public class WorkSession extends BaseEntity {
 
     @Column(nullable = false)
     private LocalDate workDate; // e.g., 2026-04-13
+
+    private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
 
     @Enumerated(EnumType.STRING)
     private SessionStatus status = SessionStatus.ACTIVE;

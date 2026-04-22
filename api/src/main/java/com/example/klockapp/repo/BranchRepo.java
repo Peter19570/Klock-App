@@ -13,5 +13,4 @@ public interface BranchRepo extends JpaRepository<Branch, Long> {
     // Used for the "Smart" loop to iterate through all branch perimeters
     List<Branch> findAll();
 
-//    Optional<Branch> findByBranchId(User user);
 }

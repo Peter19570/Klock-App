@@ -63,19 +63,19 @@ public class BranchService {
         Branch branch = branchRepo.findById(branchId)
                 .orElseThrow(() -> new NotFoundException("Branch not found"));
 
-        // 1. Get Home Team: Users assigned to this home branch [cite: 29]
+        // 1. Get Home Team: Users assigned to this home branch
         List<UserResponse> assignedStaff = userRepo.findAllByHomeBranchId(branchId)
                 .stream()
                 .map(userMapper::toDto)
                 .toList();
 
-        // 2. Get Active Now: Anyone (staff or visitor) currently clocked in here [cite: 25, 29, 51]
+        // 2. Get Active Now: Anyone (staff or visitor) currently clocked in here
         List<UserResponse> activeNow = clockEventRepo.findAllByBranchIdAndClockOutTimeIsNull(branchId)
                 .stream()
                 .map(event -> userMapper.toDto(event.getUser()))
                 .toList();
 
-        // 3. Return the Record using the full constructor [cite: 25, 29]
+        // 3. Return the Record using the full constructor
         return new BranchDetailsResponse(
                 branch.getId(),
                 branch.getDisplayName(),
@@ -83,6 +83,8 @@ public class BranchService {
                 branch.getBranchStatus(),
                 branch.getLatitude(),
                 branch.getLongitude(),
+                branch.getStartShift(),
+                branch.getEndShift(),
                 assignedStaff.size(), // totalAssignedStaff
                 activeNow.size(),     // currentActiveCount
                 assignedStaff,
@@ -105,7 +107,7 @@ public class BranchService {
             // Super Admin has global scope
             branchToFetch = requestedBranchId;
         } else {
-            // Admin is localized to their assigned branch [cite: 29, 32]
+            // Admin is localized to their assigned branch
             branchToFetch = principal.user().getHomeBranch().getId();
         }
 

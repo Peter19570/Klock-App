@@ -2,6 +2,7 @@ package com.example.klockapp.repo;
 
 import com.example.klockapp.model.ClockEvent;
 import com.example.klockapp.model.User;
+import com.example.klockapp.model.WorkSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -17,6 +18,8 @@ public interface ClockEventRepo extends JpaRepository<ClockEvent, Long>, JpaSpec
 
     // Finds the active movement to perform a clock-out [cite: 9, 51]
     Optional<ClockEvent> findByWorkSessionUserAndClockOutTimeIsNull(User user);
+
+    Optional<ClockEvent> findByClockOutTimeIsNullAndWorkSession(WorkSession workSession);
 
     // Dashboard logic: Find everyone physically present at a branch right now [cite: 13, 52]
     List<ClockEvent> findAllByBranchIdAndClockOutTimeIsNull(Long branchId);

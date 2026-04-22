@@ -136,47 +136,63 @@ interface DayBar {
 
 function SessionsChart({ bars, loading }: { bars: DayBar[]; loading: boolean }) {
   const max = Math.max(...bars.map((b) => b.count), 1);
-  const today = new Date().toISOString().slice(0, 10);
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Sessions — This Week</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Mon – Fri · total sessions per day</p>
+          <h3 className="text-sm font-semibold text-foreground">Sessions — Last 7 Days</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Total sessions recorded per day</p>
         </div>
         <TrendingUp className="h-4 w-4 text-primary" />
       </div>
 
       {loading ? (
-        <div className="flex items-end justify-center gap-2 h-28">
+        <div className="flex items-center justify-center h-24">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="flex items-end justify-between gap-1.5 h-28">
-          {bars.map((bar, i) => {
-            const heightPct = max > 0 ? (bar.count / max) * 100 : 0;
-            const isToday = bar.date === today;
-            return (
-              <div key={bar.date} className="flex-1 flex flex-col items-center gap-1.5 group">
-                <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  {bar.count}
-                </span>
-                <div className="w-full flex items-end" style={{ height: '80px' }}>
-                  <motion.div
-                    className={`w-full rounded-t-md ${isToday ? 'bg-primary' : 'bg-primary/30 dark:bg-primary/25'}`}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${Math.max(heightPct, bar.count > 0 ? 4 : 0)}%` }}
-                    transition={{ duration: 0.6, delay: i * 0.07, ease: 'easeOut' }}
-                    style={{ minHeight: bar.count > 0 ? 4 : 0 }}
+        <div className="flex flex-col gap-1.5">
+          {/* Bar area — fixed height */}
+          <div className="flex items-end gap-1.5" style={{ height: '80px' }}>
+            {bars.map((bar, i) => {
+              const isToday = bar.date === today;
+              const heightPx = bar.count > 0 ? Math.max((bar.count / max) * 76, 6) : 3;
+              return (
+                <div key={bar.date} className="flex-1 flex items-end h-full group relative">
+                  {/* hover count */}
+                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    {bar.count}
+                  </span>
+                  <div
+                    className={`w-full rounded-t-md transition-all duration-500 ${
+                      isToday ? 'bg-primary' : 'bg-primary/35 dark:bg-primary/30'
+                    }`}
+                    style={{
+                      height: `${heightPx}px`,
+                      transitionDelay: `${i * 60}ms`,
+                      opacity: bar.count === 0 ? 0.25 : 1,
+                    }}
                   />
                 </div>
-                <span className={`text-[10px] font-medium ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {bar.label}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          {/* Labels row — separate from bar area */}
+          <div className="flex gap-1.5">
+            {bars.map((bar) => {
+              const isToday = bar.date === today;
+              return (
+                <div key={bar.date} className="flex-1 flex justify-center">
+                  <span className={`text-[10px] font-medium ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {bar.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -366,32 +382,21 @@ export default function AdminOverview({
     ).then(() => setBranchDetails(new Map(map)));
   }, [branches, adminBranch, isSuperAdmin, refreshKey]);
 
-  // Fetch sessions for current Mon–Fri — today count + chart + clock-out breakdown
+  // Fetch sessions for last 7 days — build chart by grouping all sessions by workDate
   React.useEffect(() => {
-    // Helper: yyyy-MM-dd from a local Date (avoids UTC offset shifting the date)
-    const toLocalDate = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-
-    const days: DayBar[] = [];
     const now = new Date();
 
-    // Find Monday of the current week (week starts Monday)
-    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diffToMonday);
+    // Build last 7 days as yyyy-MM-dd strings (local date, no UTC shift)
+    const toLocalDateStr = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    // Build Mon–Fri slots using local dates
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+    const days: DayBar[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
       days.push({
         label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-        date: toLocalDate(d),
+        date: toLocalDateStr(d),
         count: 0,
       });
     }
@@ -402,22 +407,24 @@ export default function AdminOverview({
     setLoadingChart(true);
     setLoadingToday(true);
 
-    // Fetch up to 200 sessions for the week — realistic ceiling
     api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions/all', {
       params: { page: 0, size: 200, minWorkDate: minDate, maxWorkDate: maxDate },
     }).then((res) => {
       const sessions = res.data.data.content ?? [];
 
-      // Populate bars — workDate from backend is already yyyy-MM-dd local date
+      // Group sessions by workDate — workDate from backend is already yyyy-MM-dd
+      const countByDate = new Map<string, number>();
       sessions.forEach((s) => {
-        const bar = days.find((d) => d.date === s.workDate);
-        if (bar) bar.count++;
+        countByDate.set(s.workDate, (countByDate.get(s.workDate) ?? 0) + 1);
       });
-      setSessionBars([...days]);
 
-      // Today count using local date
-      const today = toLocalDate(now);
-      setTodaySessions(sessions.filter((s) => s.workDate === today).length);
+      // Apply counts to the pre-built day slots
+      const filledDays = days.map((d) => ({ ...d, count: countByDate.get(d.date) ?? 0 }));
+      setSessionBars(filledDays);
+
+      // Today count
+      const today = toLocalDateStr(now);
+      setTodaySessions(countByDate.get(today) ?? 0);
 
       // Clock-out breakdown
       let manual = 0, automatic = 0;

@@ -27,7 +27,6 @@ public class User extends BaseEntity {
     private String lastName;
     private String fullName;
     private String picture;
-    private String provider;
     private Boolean mustChangePassword = true;
 
     @Enumerated(EnumType.STRING)
@@ -41,5 +40,5 @@ public class User extends BaseEntity {
     private List<WorkSession> workSessions = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
-    private List<Token> tokens = new ArrayList<>();
+    private List<RefreshToken> tokens = new ArrayList<>();
 }

@@ -1,5 +1,6 @@
 package com.example.klockapp.repo;
 
+import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.model.User;
 import com.example.klockapp.model.WorkSession;
 import jakarta.persistence.QueryHint;
@@ -19,10 +20,12 @@ import java.util.stream.Stream;
 @Repository
 public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSpecificationExecutor<WorkSession> {
 
-    // Finds the container for today to attach new movements (ClockEvents) [cite: 47, 49]
+    // Finds the container for today to attach new movements (ClockEvents)
     Optional<WorkSession> findByWorkDateAndUser(LocalDate workDate, User user);
 
     Page<WorkSession> findAllByUserId(Long userId, Pageable pageable);
+
+    Optional<WorkSession> findByStatus(SessionStatus sessionStatus);
 
     @QueryHints(value = {
             @QueryHint(name = "org.hibernate.fetchSize", value = "100"),

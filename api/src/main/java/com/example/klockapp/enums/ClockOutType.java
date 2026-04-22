@@ -1,9 +1,9 @@
 package com.example.klockapp.enums;
 
 public enum ClockOutType {
-    /** User manually triggered the clock-out from the app[cite: 34]. */
+    /** User manually triggered the clock-out from the app*/
     MANUAL,
 
-    /** System automatically closed the event based on radius exit or duration[cite: 14, 50]. */
+    /** System automatically closed the event based on radius exit or duration */
     AUTOMATIC
 }

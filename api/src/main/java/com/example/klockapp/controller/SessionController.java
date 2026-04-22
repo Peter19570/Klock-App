@@ -6,6 +6,8 @@ import com.example.klockapp.dto.response.ApiResponse;
 import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
+import com.example.klockapp.enums.ArrivalStatus;
+import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.filter.SessionFilter;
 import com.example.klockapp.service.AttendanceService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -34,7 +36,7 @@ public class SessionController {
 
     /**
      * POST /api/v1/sessions/start
-     * Smart Clock-In: Finds branch via radius matching and starts a session + event[cite: 8, 44, 45].
+     * Smart Clock-In: Finds branch via radius matching and starts a session + event
      */
     @PostMapping("/start")
     public ResponseEntity<ApiResponse<ClockEventResponse>> startSession(
@@ -49,7 +51,7 @@ public class SessionController {
 
     /**
      * PUT /api/v1/sessions/end
-     * Clock-Out: Closes the currently active ClockEvent movement[cite: 9, 49].
+     * Clock-Out: Closes the currently active ClockEvent movement
      */
     @PutMapping("/end")
     public ResponseEntity<ApiResponse<ClockEventResponse>> endSession(
@@ -62,7 +64,7 @@ public class SessionController {
 
     /**
      * GET /api/v1/sessions/all
-     * Personal or Administrative workday history with nested movements[cite: 9, 36].
+     * Personal or Administrative workday history with nested movements
      */
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getAllSessions(
@@ -70,11 +72,17 @@ public class SessionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) LocalDate minWorkDate,
-            @RequestParam(required = false) LocalDate maxWorkDate) {
+            @RequestParam(required = false) LocalDate maxWorkDate,
+            @RequestParam(required = false) ArrivalStatus arrivalStatus,
+            @RequestParam(required = false) SessionStatus sessionStatus,
+            @RequestParam(required = false) Long branchId ) {
 
         SessionFilter filter = SessionFilter.builder()
                 .minWorkDate(minWorkDate)
                 .maxWorkDate(maxWorkDate)
+                .arrivalStatus(arrivalStatus)
+                .branchId(branchId)
+                .sessionStatus(sessionStatus)
                 .build();
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("workDate").descending());
@@ -100,7 +108,7 @@ public class SessionController {
 
     /**
      * GET /api/v1/sessions/active
-     * Boolean check to see if the user is currently "At Work" anywhere[cite: 10, 51].
+     * Boolean check to see if the user is currently "At Work" anywhere
      */
     @GetMapping("/active")
     public ResponseEntity<ApiResponse<Boolean>> isActive(
