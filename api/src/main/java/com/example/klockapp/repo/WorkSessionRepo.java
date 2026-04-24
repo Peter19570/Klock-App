@@ -1,5 +1,6 @@
 package com.example.klockapp.repo;
 
+import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.model.User;
 import com.example.klockapp.model.WorkSession;
 import jakarta.persistence.QueryHint;
@@ -23,6 +24,8 @@ public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSp
     Optional<WorkSession> findByWorkDateAndUser(LocalDate workDate, User user);
 
     Page<WorkSession> findAllByUserId(Long userId, Pageable pageable);
+
+    Optional<WorkSession> findByStatus(SessionStatus sessionStatus);
 
     @QueryHints(value = {
             @QueryHint(name = "org.hibernate.fetchSize", value = "100"),

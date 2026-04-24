@@ -2,6 +2,7 @@ package com.example.klockapp.repo;
 
 import com.example.klockapp.model.ClockEvent;
 import com.example.klockapp.model.User;
+import com.example.klockapp.model.WorkSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -23,4 +24,6 @@ public interface ClockEventRepo extends JpaRepository<ClockEvent, Long>, JpaSpec
 
     // History: Finds all movements within a single workday container [cite: 9, 49]
     List<ClockEvent> findAllByWorkSessionIdOrderByClockInTimeAsc(Long workSessionId);
+
+    Optional<ClockEvent> findByClockOutTimeIsNullAndWorkSession(WorkSession workSession);
 }

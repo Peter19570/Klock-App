@@ -24,6 +24,9 @@ public class WorkSession extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private SessionStatus status = SessionStatus.ACTIVE;
 
+    @Enumerated(EnumType.STRING)
+    private
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
