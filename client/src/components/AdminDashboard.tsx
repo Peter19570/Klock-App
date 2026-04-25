@@ -887,88 +887,117 @@ export function AdminDashboard() {
                         No branches yet. Create your first branch.
                       </div>
                     ) : (
-                      // FIX: gap-2 (matches Users page) instead of gap-3
-                      <div className="flex flex-col gap-2">
-                        {branches.map((b, idx) => (
-                          <motion.div
-                            key={b.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.22, delay: Math.min(idx * 0.04, 0.2) }}
-                            className="relative rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_4px_16px_rgba(0,0,0,0.35)] transition-all overflow-hidden"
-                          >
-                            <div className="flex items-center gap-3 px-4 py-3.5">
-                              <button className="flex-1 text-left min-w-0 overflow-hidden" onClick={() => setSelectedBranch(b)}>
-                                <div className="sm:hidden">
-                                  <p className="font-semibold text-sm text-foreground truncate">{b.displayName}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    {b.branchStatus === 'LOCKED' && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
-                                        <Lock className="h-2.5 w-2.5" /> Locked
-                                      </span>
-                                    )}
-                                    <span className="text-xs text-muted-foreground">{b.radius}m radius</span>
-                                  </div>
+                      <div className="flex flex-col gap-1">
+                        <AnimatePresence>
+                          {branches.map((b, idx) => (
+                            <motion.div
+                              key={b.id}
+                              layout
+                              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                              transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(idx * 0.03, 0.15) }}
+                              className="group relative flex items-center gap-4 p-2 rounded-lg hover:bg-accent"
+                              role="listitem"
+                            >
+                              {/* Icon */}
+                              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <GitBranch className="h-4 w-4" />
+                              </div>
+
+                              {/* Text — click goes to detail */}
+                              <button
+                                className="flex-grow text-left min-w-0"
+                                onClick={() => setSelectedBranch(b)}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-medium text-card-foreground leading-tight">{b.displayName}</p>
+                                  {b.branchStatus === 'LOCKED' ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
+                                      <Lock className="h-2.5 w-2.5" /> Locked
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30 shrink-0">
+                                      <Unlock className="h-2.5 w-2.5" /> Unlocked
+                                    </span>
+                                  )}
+                                  {/* Desktop: radius badge inline */}
+                                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
+                                    {b.radius}m radius
+                                  </span>
+                                  {/* Desktop: shift times badge inline */}
+                                  {(b.shiftStart || b.shiftEnd) && (
+                                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
+                                      🕐 {b.shiftStart ?? '?'} – {b.shiftEnd ?? '?'}
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="hidden sm:flex items-center gap-3">
-                                  <div className="relative min-w-0 flex-1 max-w-[55%]">
-                                    <p
-                                      className="font-semibold text-sm text-foreground truncate"
-                                      title={b.displayName}
-                                      style={{ maskImage: 'linear-gradient(to right, black 70%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 70%, transparent 100%)' }}
-                                    >
-                                      {b.displayName}
-                                    </p>
-                                  </div>
-                                  <div className="flex-1 flex justify-center">
-                                    {b.branchStatus === 'LOCKED' && (
-                                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
-                                        <Lock className="h-2.5 w-2.5" /> Locked
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-muted-foreground shrink-0">{b.radius}m</span>
-                                </div>
+                                {/* Mobile: radius + shift on second line */}
+                                <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5 sm:hidden">
+                                  {b.radius}m radius
+                                  {b.shiftStart && b.shiftEnd
+                                    ? ` · ${b.shiftStart} – ${b.shiftEnd}`
+                                    : b.shiftStart
+                                    ? ` · from ${b.shiftStart}`
+                                    : b.shiftEnd
+                                    ? ` · until ${b.shiftEnd}`
+                                    : ' · No shift set'}
+                                </p>
+                                {/* Desktop: show "No shift set" only when nothing */}
+                                {!b.shiftStart && !b.shiftEnd && (
+                                  <p className="hidden sm:block text-sm text-muted-foreground/50 line-clamp-1 mt-0.5">
+                                    No shift times set
+                                  </p>
+                                )}
                               </button>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setSelectedBranch(b)}>
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={() => setSelectedBranch(b)}
+                                  title="View branch"
+                                >
                                   <ChevronRight className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
                                   onClick={() => setDeletingBranchId(b.id)}
+                                  title="Delete branch"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
-                            </div>
 
-                            <AnimatePresence>
-                              {deletingBranchId === b.id && (
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  exit={{ opacity: 0 }}
-                                  transition={{ duration: 0.15 }}
-                                  className="absolute inset-0 flex items-center justify-between gap-3 px-4 bg-card/95 backdrop-blur-[2px] rounded-xl border border-destructive/30"
-                                >
-                                  <p className="text-sm text-foreground font-medium">
-                                    Delete <span className="text-destructive">{b.displayName}</span>?
-                                  </p>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDeletingBranchId(null)}>Cancel</Button>
-                                    <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={deleting} onClick={() => handleDeleteBranch(b.id)}>
-                                      {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
-                                    </Button>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </motion.div>
-                        ))}
+                              {/* Delete confirm overlay */}
+                              <AnimatePresence>
+                                {deletingBranchId === b.id && (
+                                  <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute inset-0 flex items-center justify-between gap-3 px-3 bg-card/95 backdrop-blur-[2px] rounded-lg border border-destructive/30"
+                                  >
+                                    <p className="text-sm text-foreground font-medium truncate">
+                                      Delete <span className="text-destructive">{b.displayName}</span>?
+                                    </p>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setDeletingBranchId(null)}>Cancel</Button>
+                                      <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={deleting} onClick={() => handleDeleteBranch(b.id)}>
+                                        {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Delete'}
+                                      </Button>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
                       </div>
                     )}
                   </motion.div>

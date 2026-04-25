@@ -23,4 +23,5 @@ public class AuditLog extends BaseEntity {
     private LocalTime clientTimeStamp;
     private Boolean verified;
     private Long userId;
+    private String name;
 }

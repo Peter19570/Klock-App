@@ -180,6 +180,8 @@ export interface AuditLogResponse {
   gpsAccuracy: number;
   clientTimeStamp: string;
   verified: boolean;
+  createdAt: string;
+  fullName: string;
 }
 
 // ─── Geolocation ──────────────────────────────────────────────────────────────

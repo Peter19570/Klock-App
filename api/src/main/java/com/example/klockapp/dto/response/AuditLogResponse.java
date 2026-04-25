@@ -1,5 +1,6 @@
 package com.example.klockapp.dto.response;
 
+import java.time.Instant;
 import java.time.LocalTime;
 
 public record AuditLogResponse(
@@ -8,6 +9,8 @@ public record AuditLogResponse(
         Integer signalStrength,
         Double gpsAccuracy,
         LocalTime clientTimeStamp,
-        Boolean verified
+        Boolean verified,
+        Instant createdAt,
+        String fullName
 ) {
 }

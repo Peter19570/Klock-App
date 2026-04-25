@@ -531,68 +531,72 @@ export default function AdminUsers({
           No users found.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {users.map((user, idx) => {
-            const isLoadingThisUser = loadingUser === user.id;
+        <div className="flex flex-col gap-1">
+          <AnimatePresence>
+            {users.map((user, idx) => {
+              const isLoadingThisUser = loadingUser === user.id;
 
-            return (
-              <motion.div
-                key={user.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18, delay: Math.min(idx * 0.03, 0.15) }}
-                className={`rounded-xl border border-border bg-card shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
-                  isLoadingThisUser ? 'opacity-60 pointer-events-none' : ''
-                }`}
-              >
-                <div
-                  className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
-                  onClick={() => handleCardClick(user.id)}
+              return (
+                <motion.div
+                  key={user.id}
+                  layout
+                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: isLoadingThisUser ? 0.98 : 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                  transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(idx * 0.03, 0.15) }}
+                  className={`group relative flex items-center gap-4 p-2 rounded-lg hover:bg-accent ${
+                    isLoadingThisUser ? 'opacity-60 pointer-events-none' : ''
+                  }`}
+                  role="listitem"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="shrink-0">
-                      {user.picture ? (
-                        <img
-                          src={user.picture}
-                          alt={user.fullName}
-                          className="h-9 w-9 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate leading-tight">
-                        {user.fullName}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                      {user.homeBranchName && (
-                        <p className="text-[10px] text-muted-foreground/60 truncate">📍 {user.homeBranchName}</p>
-                      )}
-                    </div>
+                  {/* Avatar */}
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground overflow-hidden">
+                    {user.picture ? (
+                      <img src={user.picture} alt={user.fullName} className="h-10 w-10 object-cover" />
+                    ) : (
+                      <User className="h-4 w-4" />
+                    )}
                   </div>
 
+                  {/* Text — click goes to sessions */}
+                  <button
+                    className="flex-grow text-left min-w-0"
+                    onClick={() => handleCardClick(user.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-medium text-card-foreground truncate leading-tight">
+                        {user.fullName}
+                        {isLoadingThisUser && (
+                          <span className="ml-2 text-xs text-muted-foreground animate-pulse">…</span>
+                        )}
+                      </p>
+                      {/* Desktop: branch name inline on first row */}
+                      {user.homeBranchName && (
+                        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded-full shrink-0">
+                          📍 {user.homeBranchName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                      {user.email}
+                      {/* Mobile: branch on same line */}
+                      {user.homeBranchName && (
+                        <span className="sm:hidden"> · {user.homeBranchName}</span>
+                      )}
+                    </p>
+                  </button>
+
+                  {/* Actions — revealed on hover */}
                   <div
-                    className="flex items-center gap-2 shrink-0"
+                    className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {isLoadingThisUser && (
-                      <span className="text-xs text-muted-foreground animate-pulse">…</span>
-                    )}
-
                     {isSuperAdmin && branches.length > 0 && (
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTransferUserId(user.id);
-                          setTransferBranchId(null);
-                        }}
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary"
+                        onClick={() => { setTransferUserId(user.id); setTransferBranchId(null); }}
                         title="Transfer branch"
                       >
                         <ArrowRightLeft className="h-3.5 w-3.5" />
@@ -609,17 +613,18 @@ export default function AdminUsers({
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(user.id); }}
+                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteConfirm(user.id)}
+                        title="Delete user"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
 

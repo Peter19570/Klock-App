@@ -134,6 +134,7 @@ public class AttendanceService {
         auditLog.setClientTimeStamp(request.clientTimeStamp());
         auditLog.setVerified(true);
         auditLog.setUserId(principal.user().getId());
+        auditLog.setName(principal.user().getFullName());
         auditLogRepo.save(auditLog);
 
         // Log template for successful clock-in
