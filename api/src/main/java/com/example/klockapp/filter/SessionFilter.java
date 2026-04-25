@@ -22,8 +22,6 @@ public class SessionFilter {
 
     private ArrivalStatus arrivalStatus;
 
-    private ArrivalStatus arrivalStatus;
-
     private Long userId;
 
     private Long branchId; // For Admin/Super Admin to see movements at a specific branch

@@ -143,25 +143,11 @@ public class AttendanceService {
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
 
-    // Helper to determine arrival status for session
-    private ArrivalStatus getArrivalStatus(Branch branch) {
-        LocalTime start = branch.getShiftStart();
-        LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
-
-        if (LocalTime.now().isBefore(start)) {
-            return ArrivalStatus.EARLY;
-        } else if (!LocalTime.now().isAfter(graceEnd)) {
-            return ArrivalStatus.ON_TIME;
-        } else {
-            return ArrivalStatus.LATE;
-        }
-    }
-
     /**
      * Helper to get the arrival status of a session
      * */
     private ArrivalStatus getArrivalStatus(Branch branch) {
-        LocalTime start = branch.getStartShift();
+        LocalTime start = branch.getShiftStart();
         LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
 
         if (LocalTime.now().isBefore(start)) {
@@ -320,5 +306,4 @@ public class AttendanceService {
             throw new WriteToCSVException("CSV Initialization Error", e.getMessage());
         }
     }
-
 }

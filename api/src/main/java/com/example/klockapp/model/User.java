@@ -57,5 +57,5 @@ public class User extends BaseEntity {
     private List<WorkSession> workSessions = new ArrayList<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Token> tokens = new ArrayList<>();
+    private List<RefreshToken> tokens = new ArrayList<>();
 }

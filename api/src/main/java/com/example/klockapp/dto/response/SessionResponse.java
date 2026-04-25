@@ -13,6 +13,5 @@ public record SessionResponse(
         String sessionOwner,
         ArrivalStatus arrivalStatus,
         SessionStatus status,
-        ArrivalStatus arrivalStatus,
         List<ClockEventResponse> movements
 ) {}

@@ -26,6 +26,4 @@ public interface ClockEventRepo extends JpaRepository<ClockEvent, Long>, JpaSpec
 
     // History: Finds all movements within a single workday container [cite: 9, 49]
     List<ClockEvent> findAllByWorkSessionIdOrderByClockInTimeAsc(Long workSessionId);
-
-    Optional<ClockEvent> findByClockOutTimeIsNullAndWorkSession(WorkSession workSession);
 }

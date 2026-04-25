@@ -64,7 +64,7 @@ public class SessionController {
     /**
      * Personal or Administrative workday history with nested movements.
      */
-    @GetMapping("/all")
+    @GetMapping
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getAllSessions(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestParam(defaultValue = "0") int page,
@@ -77,7 +77,7 @@ public class SessionController {
         SessionFilter filter = SessionFilter.builder()
                 .minWorkDate(minWorkDate)
                 .maxWorkDate(maxWorkDate)
-                .status(sessionStatus)
+                .sessionStatus(sessionStatus)
                 .arrivalStatus(arrivalStatus)
                 .build();
 

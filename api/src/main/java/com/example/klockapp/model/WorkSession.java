@@ -24,13 +24,11 @@ public class WorkSession extends BaseEntity {
     @Column(nullable = false)
     private LocalDate workDate; // e.g., 2026-04-13
 
+    @Enumerated(EnumType.STRING)
     private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
 
     @Enumerated(EnumType.STRING)
     private SessionStatus status = SessionStatus.ACTIVE;
-
-    @Enumerated(EnumType.STRING)
-    private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

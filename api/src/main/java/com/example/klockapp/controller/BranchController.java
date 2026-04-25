@@ -19,7 +19,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-
 @RestController
 @RequestMapping("/api/v1/branches")
 @RequiredArgsConstructor
@@ -33,7 +32,7 @@ public class BranchController {
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> createBranch(
-            @RequestBody @Valid BranchRequest request) {
+            @RequestBody BranchRequest request) {
         BranchDetailsResponse response = branchService.createBranch(request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -70,7 +69,7 @@ public class BranchController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> updateBranch(
             @PathVariable Long id,
-            @RequestBody @Valid BranchRequest request) {
+            @RequestBody BranchRequest request) {
         return ResponseEntity.ok(new ApiResponse<>("Branch updated", branchService.updateBranch(id, request)));
     }
 
