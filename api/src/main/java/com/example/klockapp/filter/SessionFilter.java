@@ -1,8 +1,9 @@
 package com.example.klockapp.filter;
 
+import com.example.klockapp.enums.ArrivalStatus;
+import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.model.User;
 import lombok.*;
-import org.springframework.web.bind.support.SessionStatus;
 
 import java.time.LocalDate;
 
@@ -18,6 +19,8 @@ public class SessionFilter {
     private LocalDate maxWorkDate;
 
     private SessionStatus status;
+
+    private ArrivalStatus arrivalStatus;
 
     private Long userId;
 

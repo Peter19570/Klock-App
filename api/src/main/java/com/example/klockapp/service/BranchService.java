@@ -46,10 +46,6 @@ public class BranchService {
         return getBranchDetails(savedBranch.getId());
     }
 
-    /**
-     * Lightweight list for dropdowns and Page views.
-     */
-//    @Cacheable(value = "branches", key = "'all'")
     public Page<BranchResponse> getAllBranches(Pageable pageable) {
         return branchRepo.findAll(pageable)
                 .map(branchMapper::toDto);
@@ -63,26 +59,29 @@ public class BranchService {
         Branch branch = branchRepo.findById(branchId)
                 .orElseThrow(() -> new NotFoundException("Branch not found"));
 
-        // 1. Get Home Team: Users assigned to this home branch [cite: 29]
+        // 1. Get Home Team: Users assigned to this home branch
         List<UserResponse> assignedStaff = userRepo.findAllByHomeBranchId(branchId)
                 .stream()
                 .map(userMapper::toDto)
                 .toList();
 
-        // 2. Get Active Now: Anyone (staff or visitor) currently clocked in here [cite: 25, 29, 51]
+        // 2. Get Active Now: Anyone (staff or visitor) currently clocked in here
         List<UserResponse> activeNow = clockEventRepo.findAllByBranchIdAndClockOutTimeIsNull(branchId)
                 .stream()
                 .map(event -> userMapper.toDto(event.getUser()))
                 .toList();
 
-        // 3. Return the Record using the full constructor [cite: 25, 29]
+        // 3. Return the Record using the full constructor
         return new BranchDetailsResponse(
                 branch.getId(),
                 branch.getDisplayName(),
                 branch.getRadius(),
                 branch.getBranchStatus(),
+                branch.getAutoClockOutDuration(),
                 branch.getLatitude(),
                 branch.getLongitude(),
+                branch.getShiftStart(),
+                branch.getShiftEnd(),
                 assignedStaff.size(), // totalAssignedStaff
                 activeNow.size(),     // currentActiveCount
                 assignedStaff,

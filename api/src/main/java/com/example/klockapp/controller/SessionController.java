@@ -6,9 +6,12 @@ import com.example.klockapp.dto.response.ApiResponse;
 import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
+import com.example.klockapp.enums.ArrivalStatus;
+import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.filter.SessionFilter;
 import com.example.klockapp.service.AttendanceService;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.apache.coyote.BadRequestException;
 import org.springframework.data.domain.Page;
@@ -33,13 +36,12 @@ public class SessionController {
     private final AttendanceService attendanceService;
 
     /**
-     * POST /api/v1/sessions/start
-     * Smart Clock-In: Finds branch via radius matching and starts a session + event[cite: 8, 44, 45].
+     * Smart Clock-In: Finds branch via radius matching and starts a session + event.
      */
     @PostMapping("/start")
     public ResponseEntity<ApiResponse<ClockEventResponse>> startSession(
             @AuthenticationPrincipal CustomUserPrincipal principal,
-            @RequestBody ClockInRequest request) throws BadRequestException {
+            @RequestBody @Valid ClockInRequest request) throws BadRequestException {
 
         ClockEventResponse response = attendanceService.clockIn(principal, request);
         return ResponseEntity
@@ -48,21 +50,19 @@ public class SessionController {
     }
 
     /**
-     * PUT /api/v1/sessions/end
-     * Clock-Out: Closes the currently active ClockEvent movement[cite: 9, 49].
+     * Clock-Out: Closes the currently active ClockEvent movement.
      */
     @PutMapping("/end")
     public ResponseEntity<ApiResponse<ClockEventResponse>> endSession(
             @AuthenticationPrincipal CustomUserPrincipal principal,
-            @RequestBody ClockOutRequest request) {
+            @RequestBody @Valid  ClockOutRequest request) {
 
         ClockEventResponse response = attendanceService.clockOut(principal, request);
         return ResponseEntity.ok(new ApiResponse<>("Clock-out success", response));
     }
 
     /**
-     * GET /api/v1/sessions/all
-     * Personal or Administrative workday history with nested movements[cite: 9, 36].
+     * Personal or Administrative workday history with nested movements.
      */
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getAllSessions(
@@ -70,11 +70,15 @@ public class SessionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) LocalDate minWorkDate,
-            @RequestParam(required = false) LocalDate maxWorkDate) {
+            @RequestParam(required = false) LocalDate maxWorkDate,
+            @RequestParam(required = false) SessionStatus sessionStatus,
+            @RequestParam(required = false) ArrivalStatus arrivalStatus) {
 
         SessionFilter filter = SessionFilter.builder()
                 .minWorkDate(minWorkDate)
                 .maxWorkDate(maxWorkDate)
+                .status(sessionStatus)
+                .arrivalStatus(arrivalStatus)
                 .build();
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("workDate").descending());
@@ -99,8 +103,7 @@ public class SessionController {
     }
 
     /**
-     * GET /api/v1/sessions/active
-     * Boolean check to see if the user is currently "At Work" anywhere[cite: 10, 51].
+     * Boolean check to see if the user is currently "At Work" anywhere.
      */
     @GetMapping("/active")
     public ResponseEntity<ApiResponse<Boolean>> isActive(
@@ -110,6 +113,9 @@ public class SessionController {
         return ResponseEntity.ok(new ApiResponse<>("Active status check", active));
     }
 
+    /**
+     * Export all session within a given time-frame.
+     */
     @GetMapping("/export")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<Void> exportSessions(

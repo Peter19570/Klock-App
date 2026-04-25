@@ -6,6 +6,7 @@ public record LiveLocationResponse(
         String sessionState,
         String latitude,
         String longitude,
-        String timeStamp
+        String timeStamp,
+        String sessionArrivalStatus
 ) {
 }

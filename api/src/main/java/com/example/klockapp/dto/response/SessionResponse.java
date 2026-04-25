@@ -1,6 +1,7 @@
 package com.example.klockapp.dto.response;
 
 
+import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.SessionStatus;
 
 import java.time.LocalDate;
@@ -11,5 +12,6 @@ public record SessionResponse(
         LocalDate workDate,
         String sessionOwner,
         SessionStatus status,
+        ArrivalStatus arrivalStatus,
         List<ClockEventResponse> movements
 ) {}

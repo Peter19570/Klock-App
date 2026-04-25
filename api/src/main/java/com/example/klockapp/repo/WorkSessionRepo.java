@@ -1,5 +1,6 @@
 package com.example.klockapp.repo;
 
+import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.SessionStatus;
 import com.example.klockapp.model.User;
 import com.example.klockapp.model.WorkSession;

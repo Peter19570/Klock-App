@@ -18,6 +18,9 @@ public class LiveLocationController {
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final LiveLocationService liveLocationService;
 
+    /**
+     * WebSocket endpoint where users send data, which is then broadcast to subscribed admins in real time.
+     * */
     @MessageMapping("/send-location")
     public void broadcastLocation(@AuthenticationPrincipal Principal principal, LiveLocationRequest request){
         if (principal == null || request == null){

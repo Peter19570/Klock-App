@@ -7,6 +7,7 @@ import com.example.klockapp.dto.response.UserDetailResponse;
 import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.filter.UserFilter;
 import com.example.klockapp.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,8 +27,7 @@ public class UserController {
     private final UserService userService;
 
     /**
-     * GET /api/v1/users/me
-     * Personal profile access for any authenticated user[cite: 16].
+     * Personal profile access for any authenticated user.
      */
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserDetailResponse>> getMyProfile(
@@ -38,11 +38,10 @@ public class UserController {
     }
 
     /**
-     * GET /api/v1/users/all
-     * Admin/Super Admin: List users with dynamic branch filtering[cite: 16].
-     * Logic: Automatically isolates data for ROLE_ADMIN to their home branch[cite: 32, 39].
+     * Admin/Super Admin: List users with dynamic branch filtering.
+     * Logic: Automatically isolates data for ROLE_ADMIN to their home branch.
      */
-    @GetMapping("/all")
+    @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
             @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -69,9 +68,8 @@ public class UserController {
     }
 
     /**
-     * GET /api/v1/users/{id}
-     * Admin/Super Admin: Detailed view of a specific user[cite: 17].
-     * Logic: Service prevents local Admins from viewing users in other branches[cite: 32].
+     * Admin/Super Admin: Detailed view of a specific user.
+     * Logic: Service prevents local Admins from viewing users in other branches.
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
@@ -87,7 +85,7 @@ public class UserController {
      * PUT /api/v1/users/{id}/transfer
      * Super Admin only: Change a user's home branch assignment[cite: 18, 24].
      */
-    @PutMapping("/{id}/transfer")
+    @PutMapping("/transfer/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> transferUser(
             @PathVariable Long id,
@@ -112,12 +110,12 @@ public class UserController {
      * POST /api/v1/users/admin
      * Super Admin: Onboard a new Branch Manager.
      */
-    @PostMapping("/admin")
+    @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<UserDetailResponse>> createUser(
-            @RequestBody UserCreationRequest request) {
+            @RequestBody @Valid UserCreationRequest request) {
         UserDetailResponse response = userService.createUser(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse<>("Admin created and assigned to branch", response));
+                .body(new ApiResponse<>("User created and assigned to branch", response));
     }
 }

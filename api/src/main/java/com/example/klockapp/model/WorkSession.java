@@ -1,12 +1,15 @@
 package com.example.klockapp.model;
 
 import com.example.klockapp.common.BaseEntity;
+import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.SessionStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,13 +28,19 @@ public class WorkSession extends BaseEntity {
     private SessionStatus status = SessionStatus.ACTIVE;
 
     @Enumerated(EnumType.STRING)
-    private
+    private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
+    private Double totalDistanceCovered = 0.0;
+
     // The movements happened during this workday
     @OneToMany(mappedBy = "workSession", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ClockEvent> clockEvents = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "workSession", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<LocationHistory> locationHistories = new ArrayList<>();
 }

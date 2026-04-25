@@ -24,4 +24,18 @@ public class LocationUtility {
 
         return distance <= radius;
     }
+
+    public static double calculateDistance(
+            double userLat, double userLng,
+            double branchLat, double branchLng){
+        double dLat = Math.toRadians(branchLat - userLat);
+        double dLng = Math.toRadians(branchLng - userLng);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(userLat)) * Math.cos(Math.toRadians(branchLat)) *
+                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS * c;
+    }
 }

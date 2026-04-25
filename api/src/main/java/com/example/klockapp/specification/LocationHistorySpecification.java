@@ -1,6 +1,6 @@
 package com.example.klockapp.specification;
 
-import com.example.klockapp.filter.SessionFilter;
+import com.example.klockapp.filter.LocationHistoryFilter;
 import com.example.klockapp.model.WorkSession;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
@@ -8,9 +8,9 @@ import org.springframework.data.jpa.domain.Specification;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WorkSessionSpecifications {
+public class LocationHistorySpecification {
 
-    public static Specification<WorkSession> withFilter(SessionFilter filter) {
+    public static Specification<WorkSession> withFilter(LocationHistoryFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -20,19 +20,8 @@ public class WorkSessionSpecifications {
             if (filter.getMaxWorkDate() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("workDate"), filter.getMaxWorkDate()));
             }
-            if (filter.getStatus() != null) {
-                predicates.add(cb.equal(root.get("status"), filter.getStatus()));
-            }
             if (filter.getUserId() != null) {
                 predicates.add(cb.equal(root.get("user").get("id"), filter.getUserId()));
-            }
-            // Join with ClockEvents to filter by branch movements
-            if (filter.getBranchId() != null) {
-                predicates.add(cb.equal(root.join("clockEvents")
-                        .get("branch").get("id"), filter.getBranchId()));
-            }
-            if (filter.getArrivalStatus() != null){
-                predicates.add(cb.equal(root.get("arrivalStatus"), filter.getArrivalStatus()));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

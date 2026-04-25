@@ -3,6 +3,7 @@ package com.example.klockapp.service;
 import com.example.klockapp.config.security.jwt.JwtService;
 import com.example.klockapp.dto.internal.CustomUserPrincipal;
 import com.example.klockapp.dto.request.AuthRequest;
+import com.example.klockapp.dto.request.DeviceIdRequest;
 import com.example.klockapp.dto.request.PasswordRequest;
 import com.example.klockapp.dto.request.RefreshTokenRequest;
 import com.example.klockapp.dto.response.AuthResponse;
@@ -59,7 +60,6 @@ public class AuthService {
     public AuthResponse refresh(RefreshTokenRequest request){
 
         String oldRefreshToken = request.refreshToken();
-
         String username = jwtService.extractUsername(oldRefreshToken);
 
         User user = userRepo.findByEmail(username)
@@ -73,7 +73,6 @@ public class AuthService {
         if (!jwtService.isTokenValid(oldRefreshToken, principal)){
             throw new InvalidTokenException("Invalid refresh token");
         }
-
         if (true == token.getRevoked()){
             throw new RevokedTokenException("Token is revoked");
         }
@@ -92,12 +91,18 @@ public class AuthService {
         return new AuthResponse(accessToken, refreshToken);
     }
 
-    public void changePassword(PasswordRequest request, Long id){
-        User user = userRepo.findById(id)
-                .orElseThrow(() -> new NotFoundException("User not found"));
-
+    // Method to reset password on first log in
+    public void changePassword(PasswordRequest request, CustomUserPrincipal principal){
+        User user = principal.user();
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setMustChangePassword(false);
+        userRepo.save(user);
+    }
+
+    // Method to take device id on first log in
+    public void getDeviceId(DeviceIdRequest request, CustomUserPrincipal principal){
+        User user = principal.user();
+        user.setDeviceId(request.deviceId());
         userRepo.save(user);
     }
 }

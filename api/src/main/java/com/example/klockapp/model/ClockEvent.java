@@ -26,6 +26,7 @@ public class ClockEvent extends BaseEntity {
 
     private Double latitudeIn;
     private Double longitudeIn;
+    private Boolean isDelaySync = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

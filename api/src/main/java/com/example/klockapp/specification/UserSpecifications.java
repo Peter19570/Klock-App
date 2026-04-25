@@ -15,10 +15,12 @@ public class UserSpecifications {
             List<Predicate> predicates = new ArrayList<>();
 
             if (filter.getEmail() != null) {
-                predicates.add(cb.like(cb.lower(root.get("email")), "%" + filter.getEmail().toLowerCase() + "%"));
+                predicates.add(cb.like(cb.lower(root.get("email")), "%"
+                        + filter.getEmail().toLowerCase() + "%"));
             }
             if (filter.getFullName() != null) {
-                predicates.add(cb.like(cb.lower(root.get("fullName")), "%" + filter.getFullName().toLowerCase() + "%"));
+                predicates.add(cb.like(cb.lower(root.get("fullName")), "%"
+                        + filter.getFullName().toLowerCase() + "%"));
             }
             if (filter.getRole() != null) {
                 predicates.add(cb.equal(root.get("role"), filter.getRole()));

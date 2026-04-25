@@ -1,13 +1,10 @@
 package com.example.klockapp.dto.request;
 
-import com.example.klockapp.enums.ClockOutType;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 
-public record ClockOutRequest(
-        ClockOutType clockOutType, // MANUAL or AUTOMATIC
-
+public record LocationRequest(
         @NotNull
         @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
         @DecimalMax(value = "90.0", message = "Latitude must be <= 90")
@@ -17,4 +14,5 @@ public record ClockOutRequest(
         @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
         @DecimalMax(value = "180.0", message = "Longitude must be <= 180")
         Double longitude
-) {}
+) {
+}

@@ -52,13 +52,10 @@ public class SecurityConfig {
                 .sessionManagement(s -> s
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/api/auth/v1/**",
-                                "/ws/**",
-                                "/api/auth/refresh",
-                                "/oauth2/**",
-                                "/login/oauth2/**").permitAll()
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated())
                 .logout(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e

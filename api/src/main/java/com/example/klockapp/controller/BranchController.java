@@ -7,6 +7,7 @@ import com.example.klockapp.dto.response.ApiResponse;
 import com.example.klockapp.dto.response.BranchDetailsResponse;
 import com.example.klockapp.dto.response.BranchResponse;
 import com.example.klockapp.service.BranchService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,7 +33,7 @@ public class BranchController {
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> createBranch(
-            @RequestBody BranchRequest request) {
+            @RequestBody @Valid BranchRequest request) {
         BranchDetailsResponse response = branchService.createBranch(request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -42,7 +43,7 @@ public class BranchController {
     /**
      * Public/Authenticated: Lightweight list for registration dropdowns and general lists.
      */
-    @GetMapping("/all")
+    @GetMapping
     public ResponseEntity<ApiResponse<Page<BranchResponse>>> getAllBranches(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -69,21 +70,19 @@ public class BranchController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> updateBranch(
             @PathVariable Long id,
-            @RequestBody BranchRequest request) {
-        // Implementation in BranchService handles full metadata updates
+            @RequestBody @Valid BranchRequest request) {
         return ResponseEntity.ok(new ApiResponse<>("Branch updated", branchService.updateBranch(id, request)));
     }
 
     /**
      * Admin/Super Admin: Local radius adjustment with "Final Word" lock logic.
      */
-    @PutMapping("/{id}/radius")
+    @PutMapping("/radius/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> updateRadius(
             @PathVariable Long id,
             @RequestParam Double radius,
             @AuthenticationPrincipal CustomUserPrincipal principal) {
-        // Logic: Service layer enforces 'branchStatus' rule for local Admins
         BranchDetailsResponse response = branchService.updateBranchRadius(id, radius, principal);
         return ResponseEntity.ok(new ApiResponse<>("Branch radius updated", response));
     }
@@ -98,7 +97,7 @@ public class BranchController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{id}/managed")
+    @GetMapping("/managed/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> getManagedBranch(
             @AuthenticationPrincipal CustomUserPrincipal principal,
@@ -111,7 +110,7 @@ public class BranchController {
     @PostMapping("/status/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> setBranchStatus(
-            @RequestBody BranchStatusRequest request,
+            @RequestBody @Valid BranchStatusRequest request,
             @PathVariable Long id){
         branchService.setBranchStatus(request, id);
         return ResponseEntity.noContent().build();
