@@ -54,7 +54,9 @@ isLocked===true
 │
 ├── services/
 │   ├── api.ts                      ← Axios instance, credentials: include
-│   ├── sessionService.ts           ← ✅ UPDATED: WorkSession/ClockEvent structure; getActiveMovement(); hasManuallyClockedOutToday via movements[]
+│   ├── sessionService.ts           ← ✅ UPDATED: WorkSession/ClockEvent structure; getActiveMovement(); 
+|   |-- attendanceService.ts
+hasManuallyClockedOutToday via movements[]
 │   ├── userService.ts              ← me / all (+ homeBranchId filter) / detail / delete / transferUser
 │   ├── branchService.ts            ← ✅ NEW: getAllBranches / getBranchDetails / createBranch / updateBranch / updateBranchRadius / deleteBranch
 │   └── locationService.ts          ← ⛔ DEPRECATED: replaced by branchService.ts
