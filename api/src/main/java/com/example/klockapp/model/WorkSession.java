@@ -24,6 +24,8 @@ public class WorkSession extends BaseEntity {
     @Column(nullable = false)
     private LocalDate workDate; // e.g., 2026-04-13
 
+    private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
+
     @Enumerated(EnumType.STRING)
     private SessionStatus status = SessionStatus.ACTIVE;
 

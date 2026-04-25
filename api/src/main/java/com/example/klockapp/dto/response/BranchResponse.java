@@ -7,8 +7,6 @@ import java.time.LocalTime;
 public record BranchResponse(
         Long id,
         String displayName,
-        Double latitude,
-        Double longitude,
         Double radius,
         BranchStatus branchStatus,
         LocalTime shiftStart,

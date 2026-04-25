@@ -106,6 +106,7 @@ public class AttendanceService {
                     newSession.setUser(user);
                     newSession.setArrivalStatus(getArrivalStatus(targetBranch));
                     newSession.setStatus(SessionStatus.ACTIVE);
+                    newSession.setArrivalStatus(getArrivalStatus(targetBranch));
                     return workSessionRepo.save(newSession);
                 });
 
@@ -145,6 +146,22 @@ public class AttendanceService {
     // Helper to determine arrival status for session
     private ArrivalStatus getArrivalStatus(Branch branch) {
         LocalTime start = branch.getShiftStart();
+        LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
+
+        if (LocalTime.now().isBefore(start)) {
+            return ArrivalStatus.EARLY;
+        } else if (!LocalTime.now().isAfter(graceEnd)) {
+            return ArrivalStatus.ON_TIME;
+        } else {
+            return ArrivalStatus.LATE;
+        }
+    }
+
+    /**
+     * Helper to get the arrival status of a session
+     * */
+    private ArrivalStatus getArrivalStatus(Branch branch) {
+        LocalTime start = branch.getStartShift();
         LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
 
         if (LocalTime.now().isBefore(start)) {

@@ -18,7 +18,9 @@ public class SessionFilter {
 
     private LocalDate maxWorkDate;
 
-    private SessionStatus status;
+    private SessionStatus sessionStatus;
+
+    private ArrivalStatus arrivalStatus;
 
     private ArrivalStatus arrivalStatus;
 

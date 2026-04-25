@@ -82,8 +82,7 @@ public class UserController {
     }
 
     /**
-     * PUT /api/v1/users/{id}/transfer
-     * Super Admin only: Change a user's home branch assignment[cite: 18, 24].
+     * Super Admin only: Change a user's home branch assignment
      */
     @PutMapping("/transfer/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -96,8 +95,7 @@ public class UserController {
     }
 
     /**
-     * DELETE /api/v1/users/{id}
-     * Super Admin only: Remove a user from the system[cite: 17, 24].
+     * Super Admin only: Remove a user from the system
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -107,7 +105,6 @@ public class UserController {
     }
 
     /**
-     * POST /api/v1/users/admin
      * Super Admin: Onboard a new Branch Manager.
      */
     @PostMapping

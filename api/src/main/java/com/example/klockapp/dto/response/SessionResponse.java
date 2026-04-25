@@ -11,6 +11,7 @@ public record SessionResponse(
         Long id,
         LocalDate workDate,
         String sessionOwner,
+        ArrivalStatus arrivalStatus,
         SessionStatus status,
         ArrivalStatus arrivalStatus,
         List<ClockEventResponse> movements

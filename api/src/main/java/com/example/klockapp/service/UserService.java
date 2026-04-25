@@ -38,7 +38,7 @@ public class UserService {
 
     /**
      * Retrieves the profile of the currently authenticated user.
-     * Accessible by all roles for their own data[cite: 33, 34].
+     * Accessible by all roles for their own data
      */
     public UserDetailResponse getUserDetails(CustomUserPrincipal principal) {
         User user = userRepo.findById(principal.user().getId())
@@ -48,18 +48,18 @@ public class UserService {
     }
 
     /**
-     * Admin/Super Admin: Lists users with dynamic filtering[cite: 16].
-     * Logic: Enforces branch isolation for local Admins[cite: 32, 39].
+     * Admin/Super Admin: Lists users with dynamic filtering
+     * Logic: Enforces branch isolation for local Admins
      */
     public Page<UserResponse> getAllUsers(
             Pageable pageable, UserFilter filter, CustomUserPrincipal principal) {
-        // Role Enforcement Logic: If Admin, force filter to their managed branch [cite: 32, 39]
+        // Role Enforcement Logic: If Admin, force filter to their managed branch
         if (principal.user().getRole() == UserRole.ADMIN) {
             // Force the filter to the Admin's own home branch to ensure branch isolation
             filter.setHomeBranchId(principal.user().getHomeBranch().getId());
         }
 
-        // Super Admin can pass a null homeBranchId to see everyone globally [cite: 23, 39]
+        // Super Admin can pass a null homeBranchId to see everyone globally
         return userRepo.findAll(UserSpecifications.withFilter(filter), pageable)
                 .map(userMapper::toDto);
     }
@@ -82,7 +82,7 @@ public class UserService {
     }
 
     /**
-     * Super Admin: Transfer a user to a different home branch[cite: 18].
+     * Super Admin: Transfer a user to a different home branch
      */
     @Transactional
     public void transferUser(Long userId, Long newBranchId) {
@@ -95,7 +95,7 @@ public class UserService {
     }
 
     /**
-     * Super Admin: Delete a user from the system[cite: 17].
+     * Super Admin: Delete a user from the system
      */
     @Transactional
     public void deleteUser(Long id) {

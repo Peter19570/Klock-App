@@ -20,8 +20,8 @@ public class WorkSessionSpecifications {
             if (filter.getMaxWorkDate() != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("workDate"), filter.getMaxWorkDate()));
             }
-            if (filter.getStatus() != null) {
-                predicates.add(cb.equal(root.get("status"), filter.getStatus()));
+            if (filter.getSessionStatus() != null) {
+                predicates.add(cb.equal(root.get("status"), filter.getSessionStatus()));
             }
             if (filter.getUserId() != null) {
                 predicates.add(cb.equal(root.get("user").get("id"), filter.getUserId()));

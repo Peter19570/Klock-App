@@ -12,7 +12,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Table(name = "refresh_tokens")
-public class Token extends BaseEntity {
+public class RefreshToken extends BaseEntity {
 
     private String token;
 

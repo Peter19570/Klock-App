@@ -104,7 +104,7 @@ public class BranchService {
             // Super Admin has global scope
             branchToFetch = requestedBranchId;
         } else {
-            // Admin is localized to their assigned branch [cite: 29, 32]
+            // Admin is localized to their assigned branch
             branchToFetch = principal.user().getHomeBranch().getId();
         }
 

@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 @Repository
 public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSpecificationExecutor<WorkSession> {
 
-    // Finds the container for today to attach new movements (ClockEvents) [cite: 47, 49]
+    // Finds the container for today to attach new movements (ClockEvents)
     Optional<WorkSession> findByWorkDateAndUser(LocalDate workDate, User user);
 
     Page<WorkSession> findAllByUserId(Long userId, Pageable pageable);
