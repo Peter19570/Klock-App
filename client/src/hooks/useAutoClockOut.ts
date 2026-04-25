@@ -113,13 +113,29 @@ export function useAutoClockOut({
     while (retries < MAX_RETRIES) {
       try {
         const pos = positionRef.current;
-        await clockOut({
+        const res = await clockOut({
           clockOutType: 'AUTOMATIC',
           latitude:  pos?.latitude  ?? 0,
           longitude: pos?.longitude ?? 0,
         });
         onSuccessRef.current();
-        onNotifyRef.current('success', 'Clocked out automatically.');
+
+        // ── Distance alert: warn if clock-out is far from clock-in ────────────
+        const movement = res.data?.data;
+        if (movement && pos && movement.latitudeIn != null && movement.longitudeIn != null) {
+          const { haversineDistance: hd } = await import('../lib/utils');
+          const distM = hd(movement.latitudeIn, movement.longitudeIn, pos.latitude, pos.longitude);
+          if (distM > 200) {
+            const distLabel = distM >= 1000
+              ? `${(distM / 1000).toFixed(1)} km`
+              : `${Math.round(distM)} m`;
+            onNotifyRef.current('warning', `You clocked out ${distLabel} from where you clocked in.`);
+          } else {
+            onNotifyRef.current('success', 'Clocked out automatically.');
+          }
+        } else {
+          onNotifyRef.current('success', 'Clocked out automatically.');
+        }
         return;
       } catch {
         retries++;

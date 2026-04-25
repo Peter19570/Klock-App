@@ -109,6 +109,11 @@ export interface ClockEventResponse {
   clockOutType: 'MANUAL' | 'AUTOMATIC' | null;
   latitudeIn: number;
   longitudeIn: number;
+  /** Clock-out coordinates — present once clocked out */
+  latitudeOut?: number | null;
+  longitudeOut?: number | null;
+  /** Server-computed straight-line distance between clock-in and clock-out (metres) */
+  distanceMeters?: number | null;
 }
 
 export interface SessionResponse {
@@ -118,6 +123,16 @@ export interface SessionResponse {
   arrivalStatus?: 'EARLY' | 'ON_TIME' | 'LATE';
   status: 'ACTIVE' | 'COMPLETED';
   movements: ClockEventResponse[];
+  /** Total distance across all movements for the session (metres) */
+  totalDistanceMeters?: number | null;
+}
+
+// ─── Offline Queue ─────────────────────────────────────────────────────────────
+
+export interface OfflineClockInEntry {
+  id: string;           // local UUID
+  payload: ClockInRequest & { isDelaySync: true };
+  queuedAt: string;     // ISO timestamp when queued
 }
 
 export interface AdminSessionResponse extends SessionResponse {

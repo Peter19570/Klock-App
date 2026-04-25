@@ -51,7 +51,7 @@ public class AuthService {
     }
 
     public void logout(RefreshTokenRequest request){
-        RefreshToken token = tokenRepo.findByTokenHash(request.refreshToken())
+        RefreshToken token = tokenRepo.findByToken(request.refreshToken())
                 .orElseThrow(() -> new NotFoundException("Token not found"));
 
         tokenRepo.delete(token);
@@ -65,7 +65,7 @@ public class AuthService {
         User user = userRepo.findByEmail(username)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        RefreshToken token = tokenRepo.findByTokenHash(oldRefreshToken)
+        RefreshToken token = tokenRepo.findByToken(oldRefreshToken)
                 .orElseThrow(() -> new NotFoundException("Token not found"));
 
         CustomUserPrincipal principal = new CustomUserPrincipal(user, null);

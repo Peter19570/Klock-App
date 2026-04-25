@@ -121,6 +121,15 @@ export const getLocationHistory = (
 ) =>
   api.get<ApiResponse<LocationResponse[]>>(`/api/v1/location/history/${userId}`, { params });
 
+// ─── Offline Queue (re-exported for convenience) ──────────────────────────────
+
+/**
+ * Call this to manually flush any queued offline clock-ins.
+ * The hook handles this automatically on `online` events, but you can
+ * also call it from a UI button (e.g. "Retry pending syncs").
+ */
+export { flushOfflineClockInQueue } from '../hooks/useAutoClockIn';
+
 // ─── Audit Log (NEW — SUPER_ADMIN only) ──────────────────────────────────────
 
 /** GET /api/v1/audit — all audit logs */

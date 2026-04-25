@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { haversineDistance } from '../lib/utils';
 import { clockIn, getActiveMovement } from '../services/sessionService';
-import type { GeoPosition } from '../types';
+import type { GeoPosition, ClockInRequest, OfflineClockInEntry } from '../types';
 
 interface UseAutoClockInOptions {
   position: GeoPosition | null;
@@ -9,10 +9,89 @@ interface UseAutoClockInOptions {
   isClockedIn: boolean;
   onSuccess: (workdaySessionId: number) => void;
   onFallbackManual: () => void;
-  onNotify: (type: 'success' | 'error', msg: string) => void;
+  onNotify: (type: 'success' | 'error' | 'warning', msg: string) => void;
 }
 
 const MAX_RETRIES = 3;
+const OFFLINE_QUEUE_KEY = 'klock_offline_clockin_queue';
+
+// ─── Device helpers ────────────────────────────────────────────────────────────
+
+async function getDeviceId(): Promise<string> {
+  const stored = localStorage.getItem('klock_device_id');
+  if (stored) return stored;
+  // Generate a stable pseudo-device-id from browser fingerprint
+  const ua = navigator.userAgent + navigator.language + screen.width + screen.height;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ua));
+  const id = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  localStorage.setItem('klock_device_id', id);
+  return id;
+}
+
+async function getBatteryLevel(): Promise<number | undefined> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nav = navigator as any;
+    if (typeof nav.getBattery === 'function') {
+      const battery = await nav.getBattery();
+      return Math.round(battery.level * 100);
+    }
+  } catch { /* not available */ }
+  return undefined;
+}
+
+function getSignalStrength(): number | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const conn = (navigator as any).connection;
+    if (!conn) return undefined;
+    // downlink in Mbps → map to rough 0-4 signal bars
+    if (conn.downlink >= 10) return 4;
+    if (conn.downlink >= 5)  return 3;
+    if (conn.downlink >= 1)  return 2;
+    if (conn.downlink > 0)   return 1;
+    return 0;
+  } catch { return undefined; }
+}
+
+// ─── Offline queue ─────────────────────────────────────────────────────────────
+
+function readQueue(): OfflineClockInEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) ?? '[]');
+  } catch { return []; }
+}
+
+function writeQueue(q: OfflineClockInEntry[]) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(q));
+}
+
+function enqueue(payload: ClockInRequest & { isDelaySync: true }) {
+  const entry: OfflineClockInEntry = {
+    id: crypto.randomUUID(),
+    payload,
+    queuedAt: new Date().toISOString(),
+  };
+  writeQueue([...readQueue(), entry]);
+}
+
+async function flushQueue(
+  onFlushed?: (count: number) => void,
+): Promise<void> {
+  const queue = readQueue();
+  if (queue.length === 0) return;
+  const remaining: OfflineClockInEntry[] = [];
+  for (const entry of queue) {
+    try {
+      await clockIn(entry.payload);
+    } catch {
+      remaining.push(entry);
+    }
+  }
+  writeQueue(remaining);
+  const flushed = queue.length - remaining.length;
+  if (flushed > 0) onFlushed?.(flushed);
+}
 
 export function useAutoClockIn({
   position,
@@ -39,6 +118,19 @@ export function useAutoClockIn({
     prevClockedInRef.current = isClockedIn;
   }, [isClockedIn]);
 
+  // ─── Flush offline queue when connectivity is restored ────────────────────
+  useEffect(() => {
+    const handleOnline = () => {
+      flushQueue((count) => {
+        onNotify('success', `Synced ${count} offline clock-in${count !== 1 ? 's' : ''} from queue.`);
+      });
+    };
+    window.addEventListener('online', handleOnline);
+    // Also try on mount (might have just come back online)
+    if (navigator.onLine) handleOnline();
+    return () => window.removeEventListener('online', handleOnline);
+  }, [onNotify]);
+
   const attempt = useCallback(
     async (pos: GeoPosition) => {
       if (attemptingRef.current) return;
@@ -59,13 +151,33 @@ export function useAutoClockIn({
         // fall through
       }
 
-      // FIXED: accuracy is now required by the new API.
-      // Use position.accuracy if available, default to 0 if browser didn't provide it.
-      const payload = {
-        latitude:  pos.latitude,
-        longitude: pos.longitude,
-        accuracy:  pos.accuracy ?? 0,
+      // ── Collect device integrity metadata ──────────────────────────────────
+      const [deviceId, batteryLevel] = await Promise.all([
+        getDeviceId(),
+        getBatteryLevel(),
+      ]);
+      const signalStrength = getSignalStrength();
+      // Java LocalTime expects "HH:mm:ss" — send only the time portion
+      const clientTimeStamp = new Date().toTimeString().slice(0, 8);
+
+      const payload: ClockInRequest = {
+        latitude:       pos.latitude,
+        longitude:      pos.longitude,
+        accuracy:       pos.accuracy ?? 0,
+        deviceId,
+        batteryLevel,
+        signalStrength,
+        clientTimeStamp,
       };
+
+      // ── Offline mode: queue and bail ───────────────────────────────────────
+      if (!navigator.onLine) {
+        enqueue({ ...payload, isDelaySync: true });
+        onNotify('warning', 'No connection — clock-in queued and will sync automatically when back online.');
+        retriesRef.current    = 0;
+        attemptingRef.current = false;
+        return;
+      }
 
       while (retriesRef.current < MAX_RETRIES) {
         if (isClockedInRef.current) {
@@ -115,3 +227,6 @@ export function useAutoClockIn({
     }
   }, [position, branches, isClockedIn, attempt]);
 }
+
+/** Exposed for manual flushing (e.g. from a Settings page or banner) */
+export { flushQueue as flushOfflineClockInQueue };

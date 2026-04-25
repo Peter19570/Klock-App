@@ -81,8 +81,13 @@ public class AttendanceService {
                         "You are not within the perimeter of any registered branch."));
 
         // Validates that the device location matches its reported position.
-        if (request.accuracy() > 100){
+        if (request.accuracy() > 150){
             throw new BadRequestException("Location accuracy is low. Trying again.");
+        }
+
+        // Ensures users don't clock-in at wrong times even if they are within the zone
+        if (request.clientTimeStamp().isAfter(targetBranch.getShiftEnd())){
+            throw new BadRequestException("Cannot clock-in at a branch past its end-shift");
         }
 
         // Ensures user is clocking in with their own device

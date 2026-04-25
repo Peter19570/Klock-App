@@ -30,7 +30,7 @@ public class AutoClockOut {
         var sessionOptional = workSessionRepo.findByStatus(SessionStatus.ACTIVE);
 
         if (sessionOptional.isEmpty()) {
-            log.info("No active session found in db");
+//            log.info("No active session found in db");
             return; // Exit gracefully
         }
 

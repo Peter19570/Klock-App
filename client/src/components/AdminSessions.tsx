@@ -3,7 +3,7 @@ import * as ReactDOM from "react-dom";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
   Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw, Download,
-  Timer, AlarmClock,
+  Timer, AlarmClock, MapPin, Ruler, BarChart2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,18 @@ import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { exportSessions } from "@/services/sessionService";
 import { getAdminSessions } from "@/services/sessionService";
-import type { SessionResponse, ClockEventResponse } from "@/types";
+import type { SessionResponse, ClockEventResponse, AdminSessionResponse } from "@/types";
 
 type ArrivalStatus = "EARLY" | "ON_TIME" | "LATE" | "";
 type SessionStatus = "ACTIVE" | "COMPLETED" | "";
+
+interface SessionFilterState {
+  minDate: string;
+  maxDate: string;
+  arrivalStatus: ArrivalStatus;
+  sessionStatus: SessionStatus;
+  branchName: string;
+}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -150,6 +158,20 @@ function SessionFilterModal({ open, onClose, filters, onApply, onClear }: Sessio
                   type="date"
                   value={local.maxDate}
                   onChange={(e) => set("maxDate", e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              {/* Branch name search */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" /> Branch
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Warehouse A"
+                  value={local.branchName}
+                  onChange={(e) => set("branchName", e.target.value)}
                   className="h-9 text-sm"
                 />
               </div>
@@ -468,6 +490,115 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
   );
 }
 
+// ─── Location Report ──────────────────────────────────────────────────────────
+
+interface BranchStat {
+  branchName: string;
+  count: number;
+  avgDistanceMeters: number | null;
+  lateCount: number;
+}
+
+function buildLocationReport(sessions: SessionResponse[]): BranchStat[] {
+  const map = new Map<string, { count: number; distances: number[]; lateCount: number }>();
+  for (const s of sessions) {
+    for (const m of s.movements) {
+      const branch = m.branchName || "Unknown";
+      const entry = map.get(branch) ?? { count: 0, distances: [], lateCount: 0 };
+      entry.count++;
+      if (m.distanceMeters != null) entry.distances.push(m.distanceMeters);
+      if (s.arrivalStatus === "LATE") entry.lateCount++;
+      map.set(branch, entry);
+    }
+  }
+  return [...map.entries()]
+    .map(([branchName, { count, distances, lateCount }]) => ({
+      branchName,
+      count,
+      avgDistanceMeters: distances.length
+        ? distances.reduce((a, b) => a + b, 0) / distances.length
+        : null,
+      lateCount,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function formatDistanceShort(m: number | null): string {
+  if (m == null) return "—";
+  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+  return `${Math.round(m)} m`;
+}
+
+function LocationReport({ sessions }: { sessions: SessionResponse[] }) {
+  const [open, setOpen] = React.useState(false);
+  const stats = React.useMemo(() => buildLocationReport(sessions), [sessions]);
+
+  if (stats.length === 0) return null;
+
+  return (
+    <div className="mt-4 rounded-xl border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <BarChart2 className="h-4 w-4 text-primary" />
+          Location Report
+          <span className="text-[11px] text-muted-foreground font-normal">
+            — clock-ins per branch
+          </span>
+        </span>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 pt-3 space-y-2">
+              {stats.map((stat) => (
+                <div
+                  key={stat.branchName}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-3 w-3 shrink-0 text-primary/60" />
+                    <span className="font-medium text-foreground truncate">{stat.branchName}</span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      {stat.count} clock-in{stat.count !== 1 ? "s" : ""}
+                    </span>
+                    {stat.avgDistanceMeters != null && (
+                      <span className="flex items-center gap-1">
+                        <Ruler className="h-2.5 w-2.5" />
+                        avg {formatDistanceShort(stat.avgDistanceMeters)}
+                      </span>
+                    )}
+                    {stat.lateCount > 0 && (
+                      <span className="flex items-center gap-1 text-rose-500">
+                        <AlarmClock className="h-2.5 w-2.5" />
+                        {stat.lateCount} late
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── AdminSessions ────────────────────────────────────────────────────────────
 
 const EMPTY_FILTERS: SessionFilterState = {
@@ -475,6 +606,7 @@ const EMPTY_FILTERS: SessionFilterState = {
   maxDate: "",
   arrivalStatus: "",
   sessionStatus: "",
+  branchName: "",
 };
 
 export default function AdminSessions() {
@@ -533,6 +665,7 @@ export default function AdminSessions() {
     filters.maxDate !== "",
     filters.arrivalStatus !== "",
     filters.sessionStatus !== "",
+    filters.branchName !== "",
   ].filter(Boolean).length;
 
   const removeChip = (key: keyof SessionFilterState) =>
@@ -640,6 +773,15 @@ export default function AdminSessions() {
                 </button>
               </span>
             )}
+            {filters.branchName && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                <MapPin className="h-3 w-3" />
+                {filters.branchName}
+                <button onClick={() => removeChip("branchName")} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -652,13 +794,32 @@ export default function AdminSessions() {
         <div className="text-center py-12 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
           No sessions found.
         </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {sessions.map((session, idx) => (
-            <SessionCard key={session.id} session={session} index={idx} />
-          ))}
-        </div>
-      )}
+      ) : (() => {
+        // Client-side branch filter (branchName is not a backend param — filter by movement branchName)
+        const filtered = filters.branchName
+          ? sessions.filter((s) =>
+              s.movements.some((m) =>
+                m.branchName?.toLowerCase().includes(filters.branchName.toLowerCase())
+              )
+            )
+          : sessions;
+
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              {filtered.map((session, idx) => (
+                <SessionCard key={session.id} session={session} index={idx} />
+              ))}
+              {filtered.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
+                  No sessions match branch "{filters.branchName}".
+                </div>
+              )}
+            </div>
+            <LocationReport sessions={filtered} />
+          </>
+        );
+      })()}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
