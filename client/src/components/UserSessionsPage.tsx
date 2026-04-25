@@ -187,9 +187,10 @@ interface SessionPageContentProps {
   userId: number;
   displayName?: string;
   onBack?: () => void;
+  headerActions?: React.ReactNode;
 }
 
-function SessionPageContent({ userId, displayName, onBack }: SessionPageContentProps) {
+function SessionPageContent({ userId, displayName, onBack, headerActions }: SessionPageContentProps) {
   const navigate = useNavigate();
 
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
@@ -290,6 +291,7 @@ function SessionPageContent({ userId, displayName, onBack }: SessionPageContentP
                 {sessions.length} session{sessions.length !== 1 ? "s" : ""}
               </span>
             )}
+            {headerActions}
             <Button
               variant="ghost"
               size="icon"
@@ -346,9 +348,10 @@ interface UserSessionsPageProps {
   onBack?: () => void;
   /** @deprecated Undo endpoints are disabled — prop kept for API compatibility */
   canUndo?: boolean;
+  headerActions?: React.ReactNode;
 }
 
-export default function UserSessionsPage({ userId: propUserId, user, onBack }: UserSessionsPageProps) {
+export default function UserSessionsPage({ userId: propUserId, user, onBack, headerActions }: UserSessionsPageProps) {
   const { userId: paramUserId } = useParams<{ userId: string }>();
 
   const resolvedId  = propUserId ?? (paramUserId ? parseInt(paramUserId, 10) : null);
@@ -369,6 +372,7 @@ export default function UserSessionsPage({ userId: propUserId, user, onBack }: U
       userId={resolvedId}
       displayName={displayName}
       onBack={onBack}
+      headerActions={headerActions}
     />
   );
 }

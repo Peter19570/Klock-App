@@ -22,17 +22,18 @@ src/
 │   └── splashed-push-notifications.tsx
 │
 ├── components/
+|   ├── AdminBranches.tsx           ← New file empty right now(was to be used to decouple branch stuff from AdminDashBoard to it)
 │   ├── AdminDashboard.tsx          ← Tab-based: Dashboard / Users / Sessions / Branches
 │   ├── UserDashboard.tsx           ← ✅ UPDATED: branches[] replaces single officeLat/Lng; clockOutType fix
 │   ├── AllSessionsPage.tsx        ← Infinite scroll, user-facing
-    |-- AdminOverview 
-    |-- UserSessionsPage.tsx        <- New
+    ├── AdminOverview 
+    ├── UserSessionsPage.tsx        <- New
 │   ├── SessionHistory.tsx          ← Renders movements[] from WorkSession (SessionResponse)
 │   ├── AdminMap.tsx                ← ✅ UPDATED: branches[] prop; SUPER_ADMIN sees all branch pins + all users; ADMIN sees own branch pin + own users
 │   ├── AdminUsers.tsx              ← User list, name + email search, homeBranchId filter
 │   ├── AdminSessions.tsx           ← Sessions table, date range filter; uses AdminSessionResponse
 │   ├── LocationSettings.tsx        ← ✅ UPDATED: branchId prop; isLockedForCurrentUser disables all inputs for ADMIN when 
-    |-- CreateAdminModal.tsx    
+    ├── CreateAdminModal.tsx    
 isLocked===true
 │   └── Navbar.tsx
 │
@@ -40,6 +41,8 @@ isLocked===true
 │   ├── LoginPage.tsx
 │   ├── OnboardingPage.tsx
 │   ├── AdminPage.tsx               ← SUPER_ADMIN and ADMIN both routed here; role gates inside
+|   ├── AuditLogsPage.tsx
+|   ├── UserLogsPage.tsx
 │   └── UserPage.tsx
 │
 ├── context/
@@ -55,7 +58,7 @@ isLocked===true
 ├── services/
 │   ├── api.ts                      ← Axios instance, credentials: include
 │   ├── sessionService.ts           ← ✅ UPDATED: WorkSession/ClockEvent structure; getActiveMovement(); 
-|   |-- attendanceService.ts
+|   ├── attendanceService.ts
 hasManuallyClockedOutToday via movements[]
 │   ├── userService.ts              ← me / all (+ homeBranchId filter) / detail / delete / transferUser
 │   ├── branchService.ts            ← ✅ NEW: getAllBranches / getBranchDetails / createBranch / updateBranch / updateBranchRadius / deleteBranch
@@ -67,21 +70,4 @@ hasManuallyClockedOutToday via movements[]
 └── lib/
     └── utils.ts                    ← cn(), haversineDistance()
 ```
-
-## 🔑 Role Matrix
-
-| Feature                        | SUPER_ADMIN | ADMIN   | USER |
-|-------------------------------|-------------|---------|------|
-| View all branches (map + list) | ✅           | ❌ own  | ❌   |
-| Create / delete branch         | ✅           | ❌      | ❌   |
-| Edit branch (name/lat/lng)     | ✅           | ❌      | ❌   |
-| Edit branch radius             | ✅           | ✅ *    | ❌   |
-| Lock/unlock branch radius      | ✅           | ❌      | ❌   |
-| View all users                 | ✅           | ✅ own  | ❌   |
-| Transfer user to branch        | ✅           | ❌      | ❌   |
-| View all sessions              | ✅           | ✅ own  | ❌   |
-| Live map (AdminMap)            | ✅ all       | ✅ own  | ❌   |
-| Clock in/out (any branch)      | ❌           | ❌      | ✅   |
-
-*Blocked by server when `isLocked === true`; `isLockedForCurrentUser` prop disables UI.
 

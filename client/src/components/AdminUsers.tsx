@@ -1,8 +1,9 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import {
-  Search, Trash2, ChevronLeft, ChevronRight, User,
+  Search, Trash2, ChevronLeft, ChevronRight, User, Plus,
   ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import api from '@/services/api';
 import { transferUser } from '@/services/userService';
 import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse } from '@/types';
 import UserSessionsPage from './UserSessionsPage';
+import UserLogsPage from '../pages/UserLogsPage';
 
 function useDebounce<T>(value: T, delay = 400): T {
   const [debouncedValue, setDebouncedValue] = React.useState(value);
@@ -26,6 +28,8 @@ interface AdminUsersProps {
   isSuperAdmin?: boolean;
   branches?: BranchResponse[];
   liveUsers?: Map<string, { status: 'clocked-in' | 'clocked-out' | 'offline' }>;
+  /** Lifted up from AdminDashboard so button sits inline with Filters */
+  onCreateUser?: () => void;
 }
 
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
@@ -60,12 +64,6 @@ function FilterModal({
     }
   }, [open, nameFilter, emailFilter, branchFilter]);
 
-  const activeCount = [
-    nameFilter !== '',
-    emailFilter !== '',
-    branchFilter !== '',
-  ].filter(Boolean).length;
-
   const handleApply = () => {
     onApply(localName, localEmail, localBranch);
     onClose();
@@ -96,7 +94,6 @@ function FilterModal({
             transition={{ duration: 0.18 }}
             className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -108,7 +105,6 @@ function FilterModal({
             </div>
 
             <div className="space-y-4">
-              {/* Name */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">Name</Label>
                 <div className="relative">
@@ -120,17 +116,13 @@ function FilterModal({
                     className="pl-9 h-9"
                   />
                   {localName && (
-                    <button
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      onClick={() => setLocalName('')}
-                    >
+                    <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setLocalName('')}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Email */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email</Label>
                 <div className="relative">
@@ -142,17 +134,13 @@ function FilterModal({
                     className="pl-9 h-9"
                   />
                   {localEmail && (
-                    <button
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      onClick={() => setLocalEmail('')}
-                    >
+                    <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setLocalEmail('')}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Branch — super admin only */}
               {isSuperAdmin && branches.length > 0 && (
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground uppercase tracking-wide">Branch</Label>
@@ -170,7 +158,6 @@ function FilterModal({
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2.5 mt-5">
               <Button variant="outline" className="flex-1 h-9 text-sm" onClick={handleClear}>
                 Clear all
@@ -188,8 +175,6 @@ function FilterModal({
 }
 
 // ─── Transfer Branch Modal ─────────────────────────────────────────────────────
-// Replaces the constrained inline dropdown — displays all branches in a
-// scrollable portal modal so no branches are cut off regardless of list size.
 
 interface TransferBranchModalProps {
   open: boolean;
@@ -233,7 +218,6 @@ function TransferBranchModal({
             transition={{ duration: 0.18 }}
             className="bg-card rounded-2xl border border-border shadow-xl w-full max-w-sm flex flex-col max-h-[80vh]"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
               <div>
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -249,7 +233,6 @@ function TransferBranchModal({
               </Button>
             </div>
 
-            {/* Search */}
             <div className="px-5 py-3 shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -260,17 +243,13 @@ function TransferBranchModal({
                   className="pl-9 h-9"
                 />
                 {search && (
-                  <button
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setSearch('')}
-                  >
+                  <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}>
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Branch list — scrollable */}
             <div className="flex-1 overflow-y-auto px-5 pb-2 min-h-0">
               {filtered.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">No branches found.</p>
@@ -298,7 +277,6 @@ function TransferBranchModal({
               )}
             </div>
 
-            {/* Footer actions */}
             <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
               <Button variant="outline" className="flex-1" onClick={onCancel} disabled={transferring}>
                 Cancel
@@ -321,32 +299,36 @@ function TransferBranchModal({
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUsers = new Map() }: AdminUsersProps) {
+type UserView = 'list' | 'sessions' | 'logs';
+
+export default function AdminUsers({
+  isSuperAdmin = false,
+  branches = [],
+  liveUsers = new Map(),
+  onCreateUser,
+}: AdminUsersProps) {
   const [users, setUsers]             = React.useState<UserResponse[]>([]);
   const [totalPages, setTotalPages]   = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(0);
   const [loading, setLoading]         = React.useState(false);
   const [refreshing, setRefreshing]   = React.useState(false);
 
-  // Applied filters
   const [nameFilter, setNameFilter]     = React.useState('');
   const [emailFilter, setEmailFilter]   = React.useState('');
   const [branchFilter, setBranchFilter] = React.useState<number | ''>('');
   const debouncedName  = useDebounce(nameFilter);
   const debouncedEmail = useDebounce(emailFilter);
 
-  // Filter modal
   const [filterOpen, setFilterOpen] = React.useState(false);
-
   const [deleteConfirm, setDeleteConfirm] = React.useState<number | null>(null);
 
-  // Transfer state — modal-based
   const [transferUserId, setTransferUserId]     = React.useState<number | null>(null);
   const [transferBranchId, setTransferBranchId] = React.useState<number | null>(null);
   const [transferring, setTransferring]         = React.useState(false);
 
   const [selectedUser, setSelectedUser] = React.useState<UserDetailResponse | null>(null);
   const [loadingUser, setLoadingUser]   = React.useState<number | null>(null);
+  const [userView, setUserView]         = React.useState<UserView>('list');
 
   const fetchUsers = React.useCallback(async (page: number) => {
     setLoading(true);
@@ -381,6 +363,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
       const userData = res.data.data;
       if (!userData) throw new Error('No user data returned');
       setSelectedUser(userData);
+      setUserView('sessions');
     } catch (err) {
       console.error('Failed to fetch user detail', err);
     } finally {
@@ -413,18 +396,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
     }
   };
 
-  const handleApplyFilters = (name: string, email: string, branch: number | '') => {
-    setNameFilter(name);
-    setEmailFilter(email);
-    setBranchFilter(branch);
-  };
-
-  const handleClearFilters = () => {
-    setNameFilter('');
-    setEmailFilter('');
-    setBranchFilter('');
-  };
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchUsers(currentPage);
@@ -437,28 +408,68 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
     branchFilter !== '',
   ].filter(Boolean).length;
 
-  // The user whose name goes in the transfer modal header
   const transferUser_ = users.find((u) => u.id === transferUserId);
 
-  if (selectedUser) {
+  const handleBackToList = () => {
+    setSelectedUser(null);
+    setUserView('list');
+  };
+
+  // ── User detail views ──────────────────────────────────────────────────────
+  if (selectedUser && userView === 'logs') {
     return (
-      <UserSessionsPage
+      <UserLogsPage
         userId={selectedUser.id}
         user={selectedUser}
-        onBack={() => setSelectedUser(null)}
-        canUndo={false}
+        onBack={() => setUserView('sessions')}
       />
     );
   }
 
+  if (selectedUser && userView === 'sessions') {
+    return (
+      <UserSessionsPage
+        userId={selectedUser.id}
+        user={selectedUser}
+        onBack={handleBackToList}
+        canUndo={false}
+        // Extra action bar: Logs button (no Create User shown here)
+        headerActions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 h-9"
+            onClick={() => setUserView('logs')}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Logs
+          </Button>
+        }
+      />
+    );
+  }
+
+  // ── User list ──────────────────────────────────────────────────────────────
   return (
     <div>
-      {/* Top bar: filters + chips + refresh */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* Top bar: Create User + Filters + chips + Refresh — all on one row */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {/* Create User — only for SUPER_ADMIN, only on list view */}
+        {isSuperAdmin && onCreateUser && (
+          <Button
+            size="sm"
+            className="flex items-center gap-2 h-9 shrink-0"
+            onClick={onCreateUser}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create User
+          </Button>
+        )}
+
         <Button
           variant="outline"
           size="sm"
-          className="flex items-center gap-2 h-9"
+          className="flex items-center gap-2 h-9 shrink-0"
           onClick={() => setFilterOpen(true)}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -469,6 +480,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
             </span>
           )}
         </Button>
+
         {/* Active filter chips */}
         <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
           {nameFilter && (
@@ -496,6 +508,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
             </span>
           )}
         </div>
+
         <Button
           variant="outline"
           size="icon"
@@ -536,7 +549,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                   className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
                   onClick={() => handleCardClick(user.id)}
                 >
-                  {/* Left: avatar + info */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="shrink-0">
                       {user.picture ? (
@@ -563,7 +575,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                     </div>
                   </div>
 
-                  {/* Right: actions */}
                   <div
                     className="flex items-center gap-2 shrink-0"
                     onClick={(e) => e.stopPropagation()}
@@ -572,7 +583,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
                       <span className="text-xs text-muted-foreground animate-pulse">…</span>
                     )}
 
-                    {/* Transfer button — opens modal */}
                     {isSuperAdmin && branches.length > 0 && (
                       <Button
                         size="icon"
@@ -613,7 +623,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-muted-foreground">Page {currentPage + 1} of {totalPages}</p>
@@ -628,7 +637,6 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
         </div>
       )}
 
-      {/* Filter Modal */}
       <FilterModal
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -637,11 +645,18 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
         branchFilter={branchFilter}
         branches={branches}
         isSuperAdmin={isSuperAdmin}
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
+        onApply={(name, email, branch) => {
+          setNameFilter(name);
+          setEmailFilter(email);
+          setBranchFilter(branch);
+        }}
+        onClear={() => {
+          setNameFilter('');
+          setEmailFilter('');
+          setBranchFilter('');
+        }}
       />
 
-      {/* Transfer Branch Modal — scrollable, shows all branches */}
       <TransferBranchModal
         open={transferUserId !== null}
         userName={transferUser_?.fullName ?? ''}

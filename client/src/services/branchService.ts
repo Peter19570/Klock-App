@@ -22,7 +22,8 @@ export const getAllBranches = (params: GetBranchesParams = {}) =>
 export const getBranchDetails = (id: number) =>
   api.get<ApiResponse<BranchDetailsResponse>>(`/api/v1/branches/${id}`);
 
-// FIXED: /api/v1/branches/${id}/managed → /api/v1/branches/managed/${id}
+// id is intentionally hardcoded to 0 by callers — backend resolves the
+// admin's own branch from the JWT and ignores the id value.
 export const getManagedBranch = (id: number) =>
   api.get<ApiResponse<BranchDetailsResponse>>(`/api/v1/branches/managed/${id}`);
 

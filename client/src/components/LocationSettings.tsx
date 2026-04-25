@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AnimatePresence, motion } from "framer-motion";
-import { getBranchDetails, updateBranch, updateBranchRadius } from "@/services/branchService";
+import { getBranchDetails, updateBranch } from "@/services/branchService";
 import {
   SplashedPushNotifications,
   type SplashedPushNotificationsHandle,
@@ -51,6 +51,8 @@ export default function LocationSettings({
   const [latRaw, setLatRaw]           = React.useState("0");
   const [lngRaw, setLngRaw]           = React.useState("0");
   const [displayName, setDisplayName] = React.useState("");
+  const [shiftStart, setShiftStart]   = React.useState("");
+  const [shiftEnd, setShiftEnd]       = React.useState("");
 
   const handleSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
@@ -65,6 +67,8 @@ export default function LocationSettings({
         setDisplayName(detail.displayName ?? "");
         setRadiusRaw(String(detail.radius));
         setDurationRaw(String(detail.autoClockOutDuration ?? 0));
+        setShiftStart(detail.shiftStart ?? "");
+        setShiftEnd(detail.shiftEnd ?? "");
 
         // Lat/lng from BranchDetailsResponse (present in the GET /branches/{id} response)
         if (!hideCoordinates) {
@@ -100,26 +104,34 @@ export default function LocationSettings({
     setShowConfirm(false);
 
     try {
-      const lockedFieldsChanged =
-        !hideCoordinates &&
-        original !== null &&
-        (displayName !== original.displayName ||
-          latVal !== (original.latitude ?? 0) ||
-          lngVal !== (original.longitude ?? 0));
+      // Always call updateBranch with the full payload so no field is silently
+      // dropped. The old split (updateBranch vs updateBranchRadius) was the
+      // root cause of lat/lng and displayName not persisting — when the unlock
+      // checkbox wasn't ticked, only radius was sent and everything else was lost.
+      await updateBranch(branchId, {
+        displayName,
+        latitude:  hideCoordinates ? (original?.latitude ?? 0) : latVal,
+        longitude: hideCoordinates ? (original?.longitude ?? 0) : lngVal,
+        radius:    radiusVal,
+        autoClockOutDuration: isNaN(durationVal) ? undefined : durationVal,
+        ...(shiftStart && { shiftStart }),
+        ...(shiftEnd   && { shiftEnd }),
+      });
 
-      if (unlocked && lockedFieldsChanged) {
-        await updateBranch(branchId, {
-          displayName,
-          latitude:  latVal,
-          longitude: lngVal,
-          radius:    radiusVal,
-          autoClockOutDuration: isNaN(durationVal) ? undefined : durationVal,
-        });
-      } else {
-        await updateBranchRadius(branchId, radiusVal);
-      }
-
-      setOriginal((prev) => prev ? { ...prev, displayName, radius: radiusVal } : prev);
+      setOriginal((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName,
+              radius: radiusVal,
+              latitude:  hideCoordinates ? prev.latitude  : latVal,
+              longitude: hideCoordinates ? prev.longitude : lngVal,
+              autoClockOutDuration: isNaN(durationVal) ? prev.autoClockOutDuration : durationVal,
+              shiftStart: shiftStart || prev.shiftStart,
+              shiftEnd:   shiftEnd   || prev.shiftEnd,
+            }
+          : prev,
+      );
       setUnlocked(false);
 
       toastRef.current?.createNotification('success', 'Branch Updated', 'Branch settings saved successfully.');
@@ -132,7 +144,7 @@ export default function LocationSettings({
     } finally {
       setSaving(false);
     }
-  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, unlocked, original, hideCoordinates, onSaved]);
+  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, shiftStart, shiftEnd, unlocked, original, hideCoordinates, onSaved]);
 
   React.useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
 
@@ -146,6 +158,8 @@ export default function LocationSettings({
         latVal !== (original.latitude ?? 0) ||
         lngVal !== (original.longitude ?? 0));
 
+    // Only show confirmation when the user has unlocked AND actually changed
+    // name or coordinates — radius/duration changes save silently.
     if (unlocked && lockedFieldsChanged) {
       setShowConfirm(true);
     } else {
@@ -310,6 +324,35 @@ export default function LocationSettings({
             disabled={allReadOnly}
             className={allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="shiftStart" className="text-sm">
+              Shift Start <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="shiftStart"
+              type="time"
+              value={shiftStart}
+              onChange={(e) => setShiftStart(e.target.value)}
+              disabled={allReadOnly}
+              className={`h-9 ${allReadOnly ? "opacity-60 cursor-not-allowed" : ""}`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="shiftEnd" className="text-sm">
+              Shift End <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="shiftEnd"
+              type="time"
+              value={shiftEnd}
+              onChange={(e) => setShiftEnd(e.target.value)}
+              disabled={allReadOnly}
+              className={`h-9 ${allReadOnly ? "opacity-60 cursor-not-allowed" : ""}`}
+            />
+          </div>
         </div>
 
         {!allReadOnly && (

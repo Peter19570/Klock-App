@@ -3,6 +3,7 @@ import * as ReactDOM from "react-dom";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
   Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw, Download,
+  Timer, AlarmClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { exportSessions } from "@/services/sessionService";
 import { getAdminSessions } from "@/services/sessionService";
 import type { SessionResponse, ClockEventResponse } from "@/types";
+
+type ArrivalStatus = "EARLY" | "ON_TIME" | "LATE" | "";
+type SessionStatus = "ACTIVE" | "COMPLETED" | "";
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -36,36 +40,68 @@ function formatDuration(start: string, end?: string | null): string {
   return `${m}m`;
 }
 
+// ─── Arrival status badge ─────────────────────────────────────────────────────
+
+function ArrivalBadge({ status }: { status?: "EARLY" | "ON_TIME" | "LATE" | null }) {
+  if (!status) return null;
+  const map = {
+    EARLY:   { label: "Early",   className: "bg-sky-400/15 text-sky-500 border-sky-400/30" },
+    ON_TIME: { label: "On Time", className: "bg-emerald-500/15 text-emerald-500 border-emerald-400/30" },
+    LATE:    { label: "Late",    className: "bg-rose-500/15 text-rose-500 border-rose-400/30" },
+  };
+  const { label, className } = map[status];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>
+      <AlarmClock className="h-2.5 w-2.5" />
+      {label}
+    </span>
+  );
+}
+
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
+
+interface SessionFilterState {
+  minDate: string;
+  maxDate: string;
+  arrivalStatus: ArrivalStatus;
+  sessionStatus: SessionStatus;
+}
 
 interface SessionFilterModalProps {
   open: boolean;
   onClose: () => void;
-  minDate: string;
-  maxDate: string;
-  onApply: (min: string, max: string) => void;
+  filters: SessionFilterState;
+  onApply: (f: SessionFilterState) => void;
   onClear: () => void;
 }
 
-function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear }: SessionFilterModalProps) {
-  const [localMin, setLocalMin] = React.useState(minDate);
-  const [localMax, setLocalMax] = React.useState(maxDate);
+const ARRIVAL_OPTIONS: { value: ArrivalStatus; label: string }[] = [
+  { value: "",        label: "Any" },
+  { value: "EARLY",   label: "Early" },
+  { value: "ON_TIME", label: "On Time" },
+  { value: "LATE",    label: "Late" },
+];
+
+const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
+  { value: "",          label: "Any" },
+  { value: "ACTIVE",    label: "Active" },
+  { value: "COMPLETED", label: "Completed" },
+];
+
+function SessionFilterModal({ open, onClose, filters, onApply, onClear }: SessionFilterModalProps) {
+  const [local, setLocal] = React.useState<SessionFilterState>(filters);
 
   React.useEffect(() => {
-    if (open) {
-      setLocalMin(minDate);
-      setLocalMax(maxDate);
-    }
-  }, [open, minDate, maxDate]);
+    if (open) setLocal(filters);
+  }, [open, filters]);
 
-  const handleApply = () => {
-    onApply(localMin, localMax);
-    onClose();
-  };
+  const set = <K extends keyof SessionFilterState>(key: K, value: SessionFilterState[K]) =>
+    setLocal((prev) => ({ ...prev, [key]: value }));
 
+  const handleApply = () => { onApply(local); onClose(); };
   const handleClear = () => {
-    setLocalMin('');
-    setLocalMax('');
+    const empty: SessionFilterState = { minDate: "", maxDate: "", arrivalStatus: "", sessionStatus: "" };
+    setLocal(empty);
     onClear();
     onClose();
   };
@@ -98,12 +134,13 @@ function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear 
             </div>
 
             <div className="space-y-4">
+              {/* Date range */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">From</Label>
                 <Input
                   type="date"
-                  value={localMin}
-                  onChange={(e) => setLocalMin(e.target.value)}
+                  value={local.minDate}
+                  onChange={(e) => set("minDate", e.target.value)}
                   className="h-9 text-sm"
                 />
               </div>
@@ -111,10 +148,56 @@ function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear 
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">To</Label>
                 <Input
                   type="date"
-                  value={localMax}
-                  onChange={(e) => setLocalMax(e.target.value)}
+                  value={local.maxDate}
+                  onChange={(e) => set("maxDate", e.target.value)}
                   className="h-9 text-sm"
                 />
+              </div>
+
+              {/* Arrival status */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <AlarmClock className="h-3.5 w-3.5" /> Arrival Status
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {ARRIVAL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => set("arrivalStatus", opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        local.arrivalStatus === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Session status */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <Timer className="h-3.5 w-3.5" /> Session Status
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {STATUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => set("sessionStatus", opt.value)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        local.sessionStatus === opt.value
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/40 text-muted-foreground border-border hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -333,6 +416,7 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
               {isActive && (
                 <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Active</span>
               )}
+              <ArrivalBadge status={session.arrivalStatus} />
             </div>
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {session.sessionOwner && <span>👤 {session.sessionOwner} · </span>}
@@ -386,6 +470,13 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
 
 // ─── AdminSessions ────────────────────────────────────────────────────────────
 
+const EMPTY_FILTERS: SessionFilterState = {
+  minDate: "",
+  maxDate: "",
+  arrivalStatus: "",
+  sessionStatus: "",
+};
+
 export default function AdminSessions() {
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
   const [totalPages, setTotalPages]   = React.useState(0);
@@ -393,22 +484,20 @@ export default function AdminSessions() {
   const [loading, setLoading]         = React.useState(false);
   const [refreshing, setRefreshing]   = React.useState(false);
 
-  const [minDate, setMinDate] = React.useState("");
-  const [maxDate, setMaxDate] = React.useState("");
-
+  const [filters, setFilters] = React.useState<SessionFilterState>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
 
-  // FIXED: replaced inline api.get with getAdminSessions service call
-  // which now correctly uses /api/v1/sessions instead of /api/v1/sessions/all
   const fetchSessions = React.useCallback(async (page: number) => {
     setLoading(true);
     try {
       const res = await getAdminSessions({
         page,
         size: 20,
-        ...(minDate && { minWorkDate: minDate }),
-        ...(maxDate && { maxWorkDate: maxDate }),
+        ...(filters.minDate      && { minWorkDate:     filters.minDate }),
+        ...(filters.maxDate      && { maxWorkDate:     filters.maxDate }),
+        ...(filters.arrivalStatus && { arrivalStatus:  filters.arrivalStatus }),
+        ...(filters.sessionStatus && { sessionStatus:  filters.sessionStatus }),
       });
       const data = res.data.data;
       setSessions(data.content);
@@ -419,7 +508,7 @@ export default function AdminSessions() {
     } finally {
       setLoading(false);
     }
-  }, [minDate, maxDate]);
+  }, [filters]);
 
   React.useEffect(() => { fetchSessions(0); }, [fetchSessions]);
 
@@ -429,18 +518,28 @@ export default function AdminSessions() {
     setRefreshing(false);
   };
 
-  const activeFilterCount = [minDate !== '', maxDate !== ''].filter(Boolean).length;
-
   const handleTodayFilter = () => {
     const today = new Date().toISOString().slice(0, 10);
-    setMinDate(today);
-    setMaxDate(today);
+    setFilters((prev) => ({ ...prev, minDate: today, maxDate: today }));
   };
 
   const isTodayActive = (() => {
     const today = new Date().toISOString().slice(0, 10);
-    return minDate === today && maxDate === today;
+    return filters.minDate === today && filters.maxDate === today;
   })();
+
+  const activeFilterCount = [
+    filters.minDate !== "",
+    filters.maxDate !== "",
+    filters.arrivalStatus !== "",
+    filters.sessionStatus !== "",
+  ].filter(Boolean).length;
+
+  const removeChip = (key: keyof SessionFilterState) =>
+    setFilters((prev) => ({ ...prev, [key]: "" }));
+
+  const ARRIVAL_LABEL: Record<string, string> = { EARLY: "Early", ON_TIME: "On Time", LATE: "Late" };
+  const STATUS_LABEL:  Record<string, string> = { ACTIVE: "Active", COMPLETED: "Completed" };
 
   return (
     <div>
@@ -465,7 +564,7 @@ export default function AdminSessions() {
             variant={isTodayActive ? "default" : "outline"}
             size="sm"
             className="flex items-center gap-2 h-9 shadow-sm shrink-0"
-            onClick={isTodayActive ? () => { setMinDate(''); setMaxDate(''); } : handleTodayFilter}
+            onClick={isTodayActive ? () => setFilters((prev) => ({ ...prev, minDate: "", maxDate: "" })) : handleTodayFilter}
           >
             <CalendarDays className="h-3.5 w-3.5" />
             Today
@@ -499,25 +598,44 @@ export default function AdminSessions() {
               disabled={refreshing || loading}
               title="Refresh sessions"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
 
-        {(minDate || maxDate) && (
+        {/* Active filter chips */}
+        {activeFilterCount > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            {minDate && (
+            {filters.minDate && (
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
-                From: {minDate}
-                <button onClick={() => setMinDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                From: {filters.minDate}
+                <button onClick={() => removeChip("minDate")} className="text-muted-foreground hover:text-foreground ml-0.5">
                   <X className="h-3 w-3" />
                 </button>
               </span>
             )}
-            {maxDate && (
+            {filters.maxDate && (
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
-                To: {maxDate}
-                <button onClick={() => setMaxDate('')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                To: {filters.maxDate}
+                <button onClick={() => removeChip("maxDate")} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {filters.arrivalStatus && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                <AlarmClock className="h-3 w-3" />
+                {ARRIVAL_LABEL[filters.arrivalStatus]}
+                <button onClick={() => removeChip("arrivalStatus")} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {filters.sessionStatus && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                <Timer className="h-3 w-3" />
+                {STATUS_LABEL[filters.sessionStatus]}
+                <button onClick={() => removeChip("sessionStatus")} className="text-muted-foreground hover:text-foreground ml-0.5">
                   <X className="h-3 w-3" />
                 </button>
               </span>
@@ -559,10 +677,9 @@ export default function AdminSessions() {
       <SessionFilterModal
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
-        minDate={minDate}
-        maxDate={maxDate}
-        onApply={(min, max) => { setMinDate(min); setMaxDate(max); }}
-        onClear={() => { setMinDate(''); setMaxDate(''); }}
+        filters={filters}
+        onApply={setFilters}
+        onClear={() => setFilters(EMPTY_FILTERS)}
       />
 
       <ExportModal
