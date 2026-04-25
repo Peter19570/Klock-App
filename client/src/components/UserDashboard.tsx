@@ -115,13 +115,12 @@ export function UserDashboard() {
   useEffect(() => {
     async function load() {
       try {
-        // If mustChangePassword is set, the backend will 403 on /me detail calls.
-        // Detect it up-front via the user object from AuthContext.
         if (user?.mustChangePassword) {
           window.location.href = '/onboarding';
           return;
         }
 
+        // getAllBranches now correctly hits /api/v1/branches via fixed branchService
         const [branchRes, activeStatus] = await Promise.all([
           getAllBranches({ page: 0, size: 100 }),
           isActive(),
@@ -134,7 +133,6 @@ export function UserDashboard() {
           await fetchActiveBranch();
         }
       } catch (err: unknown) {
-        // Backend returns 403 with mustChangePassword hint — redirect to onboarding
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
           window.location.href = '/onboarding';
@@ -215,8 +213,8 @@ export function UserDashboard() {
   // ─── Auto hooks ───────────────────────────────────────────────────────────
   const branchPerimeters = branches.map((b) => ({
     id:     b.id,
-    lat:    b.latitude,
-    lng:    b.longitude,
+    lat:    b.latitude ?? 0,
+    lng:    b.longitude ?? 0,
     radius: b.radius,
   }));
 
@@ -245,9 +243,11 @@ export function UserDashboard() {
     if (!position) { notify('error', 'Location not available.'); return; }
     setActionLoading(true);
     try {
+      // FIXED: accuracy is now required — use position.accuracy if available
       const res = await clockIn({
         latitude:  position.latitude,
         longitude: position.longitude,
+        accuracy:  position.accuracy ?? 0,
       });
       await handleClockInSuccess(res.data.data.id);
       notify('success', 'Clocked in successfully.');
@@ -264,9 +264,15 @@ export function UserDashboard() {
   // ─── Manual clock-out ─────────────────────────────────────────────────────
   const handleManualClockOut = async () => {
     if (!activeSessionId) return;
+    if (!position) { notify('error', 'Location not available.'); return; }
     setActionLoading(true);
     try {
-      await clockOut({ clockOutType: 'MANUAL' });
+      // FIXED: latitude + longitude now required in ClockOutRequest
+      await clockOut({
+        clockOutType: 'MANUAL',
+        latitude:  position.latitude,
+        longitude: position.longitude,
+      });
       notify('success', 'Clocked out successfully.');
 
       setSessionDoneForToday(true);
@@ -281,12 +287,18 @@ export function UserDashboard() {
           }
           const { haversineDistance } = await import('../lib/utils');
           const inAnyZone = branchesRef.current.some(
-            (b) => haversineDistance(pos.latitude, pos.longitude, b.latitude, b.longitude) <= b.radius,
+            (b) =>
+              b.latitude != null && b.longitude != null &&
+              haversineDistance(pos.latitude, pos.longitude, b.latitude, b.longitude) <= b.radius,
           );
           if (inAnyZone) {
             notify('warning', 'Still in zone — auto clocking you back in.');
             try {
-              const res = await clockIn({ latitude: pos.latitude, longitude: pos.longitude });
+              const res = await clockIn({
+                latitude:  pos.latitude,
+                longitude: pos.longitude,
+                accuracy:  pos.accuracy ?? 0,
+              });
               setCooldownActive(false);
               setSessionDoneForToday(false);
               await handleClockInSuccess(res.data.data.id);

@@ -360,7 +360,7 @@ export default function AdminOverview({
   // Fetch total users
   React.useEffect(() => {
     setLoadingUsers(true);
-    api.get<ApiResponse<PageResponse<{ id: number }>>>('/api/v1/users/all', {
+    api.get<ApiResponse<PageResponse<{ id: number }>>>('/api/v1/users', {
       params: { page: 0, size: 1 },
     }).then((res) => {
       setTotalUsers(res.data.data.totalElements);
@@ -407,7 +407,7 @@ export default function AdminOverview({
     setLoadingChart(true);
     setLoadingToday(true);
 
-    api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions/all', {
+    api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions', {
       params: { page: 0, size: 200, minWorkDate: minDate, maxWorkDate: maxDate },
     }).then((res) => {
       const sessions = res.data.data.content ?? [];

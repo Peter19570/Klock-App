@@ -8,6 +8,8 @@ public record BranchResponse(
         Long id,
         String displayName,
         Double radius,
+        Double latitude,
+        Double longitude,
         BranchStatus branchStatus,
         LocalTime shiftStart,
         LocalTime shiftEnd

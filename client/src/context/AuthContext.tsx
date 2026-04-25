@@ -16,7 +16,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<UserDetailResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
 
-  // ── fetchUser ──────────────────────────────────────────────────────────────
   const fetchUser = React.useCallback(async (): Promise<UserDetailResponse | null> => {
     try {
       const res = await api.get<{ data: UserDetailResponse }>("/api/v1/users/me");
@@ -31,20 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // ── Session restore on mount ───────────────────────────────────────────────
-  // FIX (Bug 1): Instead of relying on window.location.pathname (which is
-  // fragile — query strings, hash routes, and trailing slashes all break the
-  // equality check), we look at whether BOTH tokens exist. If they do, we
-  // attempt to restore the session regardless of the current route. If the
-  // access token is expired, the Axios interceptor will silently refresh it
-  // before /users/me fires, so the user stays logged in. If both tokens are
-  // absent we just stop loading — the router's protected-route guards handle
-  // the redirect to login.
-  //
-  // We also call clearLoggingOutFlag() here so that a user who was force-
-  // logged-out and lands back on the login page can log in again on the first
-  // attempt. Without this, the sessionStorage flag from forceLogout() would
-  // block every subsequent request.
   React.useEffect(() => {
     clearLoggingOutFlag();
 
@@ -58,9 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — run once on mount only
+  }, []);
 
-  // ── Redirect after login ───────────────────────────────────────────────────
   const handleHardRedirect = (userData: UserDetailResponse) => {
     if (userData.mustChangePassword) {
       window.location.href = "/onboarding";
@@ -73,29 +57,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = "/dashboard";
   };
 
-  // ── login ──────────────────────────────────────────────────────────────────
+  // FIXED: /api/auth/v1/login → /api/v1/auth/login
   const login = async (data: AuthRequest) => {
     const res = await api.post<{ data: { accessToken: string; refreshToken: string } }>(
-      "/api/auth/v1/login",
+      "/api/v1/auth/login",
       data
     );
     const { accessToken, refreshToken } = res.data.data;
-
-    // Save BEFORE fetchUser so /users/me goes out with a valid Bearer header
     tokenStore.save(accessToken, refreshToken);
-
     const userData = await fetchUser();
     if (userData) handleHardRedirect(userData);
   };
 
-  // ── logout ─────────────────────────────────────────────────────────────────
+  // FIXED: /api/auth/logout → /api/v1/auth/logout
   const logout = async () => {
     const refreshToken = tokenStore.getRefresh();
     setUser(null);
-
     try {
       if (refreshToken) {
-        await api.post("/api/auth/logout", { refreshToken });
+        await api.post("/api/v1/auth/logout", { refreshToken });
       }
     } catch (err) {
       console.warn("Logout request failed (token may already be revoked):", err);

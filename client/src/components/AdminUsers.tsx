@@ -351,7 +351,7 @@ export default function AdminUsers({ isSuperAdmin = false, branches = [], liveUs
   const fetchUsers = React.useCallback(async (page: number) => {
     setLoading(true);
     try {
-      const res = await api.get<ApiResponse<PageResponse<UserResponse>>>('/api/v1/users/all', {
+      const res = await api.get<ApiResponse<PageResponse<UserResponse>>>('/api/v1/users', {
         params: {
           page,
           size: 20,

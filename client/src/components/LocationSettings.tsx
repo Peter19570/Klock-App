@@ -64,6 +64,7 @@ export default function LocationSettings({
         setOriginal(detail);
         setDisplayName(detail.displayName ?? "");
         setRadiusRaw(String(detail.radius));
+        setDurationRaw(String(detail.autoClockOutDuration ?? 0));
 
         // Lat/lng from BranchDetailsResponse (present in the GET /branches/{id} response)
         if (!hideCoordinates) {

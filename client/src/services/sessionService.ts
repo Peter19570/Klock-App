@@ -7,6 +7,9 @@ import type {
   SessionResponse,
   AdminSessionResponse,
   ClockEventResponse,
+  LocationRequest,
+  LocationResponse,
+  AuditLogResponse,
 } from '../types';
 
 // ─── Query params ─────────────────────────────────────────────────────────────
@@ -14,10 +17,10 @@ import type {
 export interface GetUserSessionsParams {
   page?: number;
   size?: number;
-  /** yyyy-MM-dd */
   minWorkDate?: string;
-  /** yyyy-MM-dd */
   maxWorkDate?: string;
+  sessionStatus?: 'ACTIVE' | 'COMPLETED';
+  arrivalStatus?: 'EARLY' | 'ON_TIME' | 'LATE';
 }
 
 export interface GetUserSessionsByIdParams extends GetUserSessionsParams {
@@ -25,46 +28,30 @@ export interface GetUserSessionsByIdParams extends GetUserSessionsParams {
 }
 
 export interface GetAdminSessionsParams extends GetUserSessionsParams {
-  clockOutType?: 'MANUAL' | 'AUTOMATIC';
+  // NOTE: branchId filter was removed from the new API — dropped here too
 }
 
 // ─── User endpoints ───────────────────────────────────────────────────────────
 
-/**
- * GET /api/v1/sessions/all
- * Returns the authenticated user's own workday history.
- */
+// FIXED: /api/v1/sessions/all → /api/v1/sessions
 export const getUserSessions = (params: GetUserSessionsParams = {}) =>
-  api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions/all', { params });
+  api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions', { params });
 
 /** Backward-compat alias */
 export const getAllSessions = getUserSessions;
 
 // ─── Admin endpoints ──────────────────────────────────────────────────────────
 
-/**
- * GET /api/v1/sessions/{id}
- * Returns paginated sessions for a specific user (admin use).
- */
 export const getUserSessionsById = ({ userId, ...params }: GetUserSessionsByIdParams) =>
   api.get<ApiResponse<PageResponse<SessionResponse>>>(`/api/v1/sessions/${userId}`, { params });
 
-/**
- * GET /api/v1/sessions/all  (admin authority)
- * ADMINs only see sessions for their own branch; SUPER_ADMINs see all.
- */
+// FIXED: /api/v1/sessions/all → /api/v1/sessions
 export const getAdminSessions = (params: GetAdminSessionsParams = {}) =>
   api.get<ApiResponse<PageResponse<AdminSessionResponse>>>(
-    '/api/v1/sessions/all',
+    '/api/v1/sessions',
     { params },
   );
 
-/**
- * GET /api/v1/sessions/export
- * Downloads a CSV of sessions filtered by date range.
- * @param start yyyy-MM-dd (optional)
- * @param end   yyyy-MM-dd (optional)
- */
 export const exportSessions = (start?: string, end?: string) =>
   api.get('/api/v1/sessions/export', {
     params: {
@@ -76,33 +63,15 @@ export const exportSessions = (start?: string, end?: string) =>
 
 // ─── Clock actions ────────────────────────────────────────────────────────────
 
-/**
- * POST /api/v1/sessions/start
- * Smart Discovery: pass raw GPS — backend resolves the branch.
- */
 export const clockIn = (data: ClockInRequest) =>
   api.post<ApiResponse<ClockEventResponse>>('/api/v1/sessions/start', data);
 
-/**
- * PUT /api/v1/sessions/end
- * Body: { clockOutType: 'MANUAL' | 'AUTOMATIC' }
- */
+// FIXED: ClockOutRequest now requires latitude + longitude
 export const clockOut = (data: ClockOutRequest) =>
   api.put<ApiResponse<ClockEventResponse>>('/api/v1/sessions/end', data);
 
-/**
- * PUT /api/v1/sessions/undo/{id}
- * Reopens a ClockEvent (the ClockEvent id, not the WorkSession id).
- */
-export const undoClockOut = (id: number) =>
-  api.put(`/api/v1/sessions/undo/${id}`);
-
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-/**
- * GET /api/v1/sessions/active
- * Returns true if the current user has an open ClockEvent (any branch).
- */
 export const isActive = async (): Promise<boolean> => {
   const res = await api.get<ApiResponse<boolean> | boolean>('/api/v1/sessions/active');
   const payload = res.data;
@@ -113,9 +82,6 @@ export const isActive = async (): Promise<boolean> => {
   return false;
 };
 
-/**
- * Returns the WorkSession for today if one exists, null otherwise.
- */
 export const getTodaySession = async (): Promise<SessionResponse | null> => {
   const today = new Date().toISOString().split('T')[0];
   const res = await getUserSessions({
@@ -128,18 +94,12 @@ export const getTodaySession = async (): Promise<SessionResponse | null> => {
   return content.length > 0 ? content[0] : null;
 };
 
-/**
- * Returns the currently open ClockEvent within today's session, or null.
- */
 export const getActiveMovement = async (): Promise<ClockEventResponse | null> => {
   const session = await getTodaySession();
   if (!session) return null;
   return session.movements.find((m) => m.clockOutTime === null) ?? null;
 };
 
-/**
- * Returns true if the user has at least one MANUAL clock-out today.
- */
 export const hasManuallyClockedOutToday = async (): Promise<boolean> => {
   const session = await getTodaySession();
   if (!session) return false;
@@ -147,3 +107,26 @@ export const hasManuallyClockedOutToday = async (): Promise<boolean> => {
     (m) => m.clockOutType === 'MANUAL' && m.clockOutTime !== null,
   );
 };
+
+// ─── Location History (NEW) ───────────────────────────────────────────────────
+
+/** POST /api/v1/location/ping — send periodic location while clocked in */
+export const sendLocationPing = (data: LocationRequest) =>
+  api.post<void>('/api/v1/location/ping', data);
+
+/** GET /api/v1/location/history/{id} — fetch a user's location history */
+export const getLocationHistory = (
+  userId: number,
+  params: { minWorkDate?: string; maxWorkDate?: string } = {},
+) =>
+  api.get<ApiResponse<LocationResponse[]>>(`/api/v1/location/history/${userId}`, { params });
+
+// ─── Audit Log (NEW — SUPER_ADMIN only) ──────────────────────────────────────
+
+/** GET /api/v1/audit — all audit logs */
+export const getAllAuditLogs = () =>
+  api.get<ApiResponse<AuditLogResponse[]>>('/api/v1/audit');
+
+/** GET /api/v1/audit/{id} — audit logs for a specific user */
+export const getUserAuditLogs = (userId: number) =>
+  api.get<ApiResponse<AuditLogResponse[]>>(`/api/v1/audit/${userId}`);

@@ -5,12 +5,6 @@ import type { GeoPosition } from '../types';
 
 interface UseAutoClockInOptions {
   position: GeoPosition | null;
-  /**
-   * Array of branch perimeters to check against.
-   * In multi-branch mode, the hook checks ALL branches and triggers as soon as
-   * the user steps into any one of them. The backend then does the authoritative
-   * Smart Discovery match, so this client-side check is just a debounce guard.
-   */
   branches: Array<{ id: number; lat: number; lng: number; radius: number }>;
   isClockedIn: boolean;
   onSuccess: (workdaySessionId: number) => void;
@@ -35,13 +29,11 @@ export function useAutoClockIn({
   const isClockedInRef = useRef(isClockedIn);
   useEffect(() => { isClockedInRef.current = isClockedIn; }, [isClockedIn]);
 
-  // When the user clocks out while still inside the zone, reset so the next
-  // position tick can re-detect entry. Also abort any in-flight retry loop.
   const prevClockedInRef = useRef(isClockedIn);
   useEffect(() => {
     if (prevClockedInRef.current && !isClockedIn) {
       wasInsideRef.current  = false;
-      retriesRef.current    = MAX_RETRIES; // cancels the while-loop
+      retriesRef.current    = MAX_RETRIES;
       attemptingRef.current = false;
     }
     prevClockedInRef.current = isClockedIn;
@@ -53,15 +45,9 @@ export function useAutoClockIn({
       attemptingRef.current = true;
       retriesRef.current    = 0;
 
-      // Guard: check if an open ClockEvent already exists (handles page-refresh
-      // case where React state hasn't hydrated yet).
       try {
         const activeMovement = await getActiveMovement();
         if (activeMovement) {
-          // Surface the parent workday id via onSuccess so the dashboard
-          // can hydrate isClockedIn correctly, then bail.
-          // getActiveMovement returns a ClockEvent; we need the workday id.
-          // getTodaySession gives us that.
           const { getTodaySession } = await import('../services/sessionService');
           const session = await getTodaySession();
           if (session) onSuccess(session.id);
@@ -70,11 +56,16 @@ export function useAutoClockIn({
           return;
         }
       } catch {
-        // If the check fails, fall through to the retry loop.
+        // fall through
       }
 
-      // Smart Discovery: just send coords — backend resolves which branch.
-      const payload = { latitude: pos.latitude, longitude: pos.longitude };
+      // FIXED: accuracy is now required by the new API.
+      // Use position.accuracy if available, default to 0 if browser didn't provide it.
+      const payload = {
+        latitude:  pos.latitude,
+        longitude: pos.longitude,
+        accuracy:  pos.accuracy ?? 0,
+      };
 
       while (retriesRef.current < MAX_RETRIES) {
         if (isClockedInRef.current) {
@@ -88,7 +79,7 @@ export function useAutoClockIn({
           retriesRef.current    = 0;
           attemptingRef.current = false;
 
-          if (isClockedInRef.current) return; // race guard
+          if (isClockedInRef.current) return;
 
           onSuccess(res.data.data.id);
           onNotify('success', 'Clocked in automatically! 👍');
@@ -111,7 +102,6 @@ export function useAutoClockIn({
   useEffect(() => {
     if (!position || isClockedIn || branches.length === 0) return;
 
-    // User is "inside" if they are within the radius of ANY registered branch.
     const isInside = branches.some(
       (b) =>
         haversineDistance(position.latitude, position.longitude, b.lat, b.lng) <= b.radius,

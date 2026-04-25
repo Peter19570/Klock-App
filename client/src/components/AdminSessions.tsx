@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
-import api from "@/services/api";
 import { exportSessions } from "@/services/sessionService";
-import type { ApiResponse, PageResponse, SessionResponse, ClockEventResponse } from "@/types";
+import { getAdminSessions } from "@/services/sessionService";
+import type { SessionResponse, ClockEventResponse } from "@/types";
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, {
@@ -87,7 +87,6 @@ function SessionFilterModal({ open, onClose, minDate, maxDate, onApply, onClear 
             transition={{ duration: 0.18 }}
             className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -157,11 +156,9 @@ function ExportModal({ open, onClose }: ExportModalProps) {
     setExporting(true);
     try {
       const res = await exportSessions(startDate || undefined, endDate || undefined);
-      // Build a filename like: sessions_2024-01-01_2024-01-31.csv
       const from = startDate || "all";
       const to   = endDate   || "all";
       const filename = `sessions_${from}_${to}.csv`;
-
       const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
       const a   = document.createElement("a");
       a.href    = url;
@@ -194,7 +191,6 @@ function ExportModal({ open, onClose }: ExportModalProps) {
             transition={{ duration: 0.18 }}
             className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
                 <Download className="h-4 w-4 text-primary" />
@@ -317,14 +313,12 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
         isActive ? "border-emerald-500/30" : "border-border"
       }`}
     >
-      {/* Header — click to expand */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="w-full text-left px-4 py-3"
       >
         <div className="flex items-center gap-3">
-          {/* Icon */}
           <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isActive ? "bg-emerald-500/15" : "bg-primary/10"}`}>
             {isActive ? (
               <Clock className="w-3.5 h-3.5 text-emerald-500" />
@@ -333,7 +327,6 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
             )}
           </div>
 
-          {/* Date + meta */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold text-foreground leading-tight">{formatDate(session.workDate)}</p>
@@ -350,7 +343,6 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
             </p>
           </div>
 
-          {/* Right side */}
           <div className="flex items-center gap-2 shrink-0">
             {!isActive && (
               <span className="hidden sm:inline-flex items-center rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
@@ -364,7 +356,6 @@ function SessionCard({ session, index }: { session: SessionResponse; index: numb
         </div>
       </button>
 
-      {/* Expanded clock events */}
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
@@ -402,24 +393,22 @@ export default function AdminSessions() {
   const [loading, setLoading]         = React.useState(false);
   const [refreshing, setRefreshing]   = React.useState(false);
 
-  // Applied filters
   const [minDate, setMinDate] = React.useState("");
   const [maxDate, setMaxDate] = React.useState("");
 
-  // Modals
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
 
+  // FIXED: replaced inline api.get with getAdminSessions service call
+  // which now correctly uses /api/v1/sessions instead of /api/v1/sessions/all
   const fetchSessions = React.useCallback(async (page: number) => {
     setLoading(true);
     try {
-      const res = await api.get<ApiResponse<PageResponse<SessionResponse>>>("/api/v1/sessions/all", {
-        params: {
-          page,
-          size: 20,
-          ...(minDate && { minWorkDate: minDate }),
-          ...(maxDate && { maxWorkDate: maxDate }),
-        },
+      const res = await getAdminSessions({
+        page,
+        size: 20,
+        ...(minDate && { minWorkDate: minDate }),
+        ...(maxDate && { maxWorkDate: maxDate }),
       });
       const data = res.data.data;
       setSessions(data.content);
@@ -455,9 +444,7 @@ export default function AdminSessions() {
 
   return (
     <div>
-      {/* Filter bar */}
       <div className="flex flex-col gap-2 mb-4">
-        {/* Row 1: action buttons */}
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -485,7 +472,6 @@ export default function AdminSessions() {
           </Button>
 
           <div className="flex items-center gap-2 ml-auto">
-            {/* Export: icon-only on mobile, full label on sm+ */}
             <Button
               variant="outline"
               size="icon"
@@ -518,7 +504,6 @@ export default function AdminSessions() {
           </div>
         </div>
 
-        {/* Row 2: active filter chips — only shown when filters are set */}
         {(minDate || maxDate) && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {minDate && (
@@ -541,7 +526,6 @@ export default function AdminSessions() {
         )}
       </div>
 
-      {/* Cards */}
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -558,7 +542,6 @@ export default function AdminSessions() {
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-muted-foreground">Page {currentPage + 1} of {totalPages}</p>
@@ -573,7 +556,6 @@ export default function AdminSessions() {
         </div>
       )}
 
-      {/* Filter Modal */}
       <SessionFilterModal
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -583,7 +565,6 @@ export default function AdminSessions() {
         onClear={() => { setMinDate(''); setMaxDate(''); }}
       />
 
-      {/* Export Modal */}
       <ExportModal
         open={exportOpen}
         onClose={() => setExportOpen(false)}

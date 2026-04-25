@@ -176,7 +176,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
   const [liveRadius, setLiveRadius]   = useState<number | null>(null);
   const [togglingLock, setTogglingLock] = useState(false);
   const [currentLocked, setCurrentLocked] = useState(
-    branch.branchStatus === 'LOCKED' || branch.isLocked,
+    branch.branchStatus === 'LOCKED',
   );
   const [staffTab, setStaffTab]       = useState<StaffTab>('assigned');
   const topRef                        = useRef<HTMLDivElement>(null);
@@ -214,8 +214,10 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
 
   const previewBranch: BranchResponse = {
     ...branch,
+    latitude: details?.latitude ?? 0,
+    longitude: details?.longitude ?? 0,
     radius: liveRadius ?? branch.radius,
-    isLocked: currentLocked,
+    branchStatus: currentLocked ? 'LOCKED' : 'UNLOCKED',
   };
 
   return (
@@ -478,7 +480,7 @@ function AdminBranchView({
         <div className="flex flex-col">
           <LocationSettings
             branchId={adminBranch.id}
-            isLockedForCurrentUser={adminBranch.isLocked}
+            isLockedForCurrentUser={adminBranch.branchStatus === 'LOCKED'}
             hideCoordinates
             onRadiusChange={(r) => setLiveRadius(r)}
             onSaved={fetchAdminBranch}
@@ -640,10 +642,7 @@ export function AdminDashboard() {
     try {
       const res = await getAllBranches({ page: 0, size: 100 });
       const content = res.data.data.content ?? [];
-      setBranches(content.map((b) => ({
-        ...b,
-        isLocked: b.branchStatus === 'LOCKED' || b.isLocked,
-      })));
+      setBranches(content);
     } catch {
       notify('error', 'Could not load branch data.');
     }
@@ -668,7 +667,6 @@ export function AdminDashboard() {
         longitude: detail.longitude ?? 0,
         radius: detail.radius,
         branchStatus: detail.branchStatus,
-        isLocked: detail.branchStatus === 'LOCKED',
       });
     } catch {
       notify('error', 'Could not load your branch data.');
@@ -867,7 +865,7 @@ export function AdminDashboard() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-xs font-semibold text-foreground truncate">{b.displayName}</p>
-                              {b.isLocked && (
+                              {b.branchStatus === 'LOCKED' && (
                                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium shrink-0">
                                   <Lock className="h-2.5 w-2.5" /> Locked
                                 </span>
@@ -921,7 +919,7 @@ export function AdminDashboard() {
                                   onClick={() => { setMapFocusBranchId(b.id); setBranchListOpen(false); }}
                                 >
                                   <span className="font-medium truncate">{b.displayName}</span>
-                                  {b.isLocked && (
+                                  {b.branchStatus === 'LOCKED' && (
                                     <span className="ml-2 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium shrink-0">
                                       <Lock className="h-2.5 w-2.5" /> Locked
                                     </span>
@@ -1082,7 +1080,7 @@ export function AdminDashboard() {
                                 <div className="sm:hidden">
                                   <p className="font-semibold text-sm text-foreground truncate">{b.displayName}</p>
                                   <div className="flex items-center gap-2 mt-1">
-                                    {b.isLocked && (
+                                    {b.branchStatus === 'LOCKED' && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
                                         <Lock className="h-2.5 w-2.5" /> Locked
                                       </span>
@@ -1106,7 +1104,7 @@ export function AdminDashboard() {
                                     </p>
                                   </div>
                                   <div className="flex-1 flex justify-center">
-                                    {b.isLocked && (
+                                    {b.branchStatus === 'LOCKED' && (
                                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
                                         <Lock className="h-2.5 w-2.5" /> Locked
                                       </span>

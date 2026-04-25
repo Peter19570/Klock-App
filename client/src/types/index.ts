@@ -8,6 +8,10 @@ export interface PasswordRequest {
   password: string;
 }
 
+export interface DeviceIdRequest {
+  deviceId: string;
+}
+
 // ─── Roles ────────────────────────────────────────────────────────────────────
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'USER';
 
@@ -19,11 +23,10 @@ export interface UserDetailResponse {
   email: string;
   firstName: string;
   lastName: string;
+  picture?: string;
   role: UserRole;
   homeBranchName: string;
-  homeBranchId?: number;
   createdAt: string;
-  /** When true the user must change their password before using the app */
   mustChangePassword?: boolean;
 }
 
@@ -41,7 +44,6 @@ export interface UserCreationRequest {
   email: string;
   firstName: string;
   lastName: string;
-  /** Branch the new user/admin is assigned to */
   managedBranchId?: number;
   userRole: UserRole;
 }
@@ -54,6 +56,8 @@ export interface BranchRequest {
   longitude: number;
   radius: number;
   autoClockOutDuration?: number;
+  shiftStart?: string;
+  shiftEnd?: string;
 }
 
 /** POST /api/v1/branches/status/{id} */
@@ -61,26 +65,34 @@ export interface BranchStatusRequest {
   branchStatus: 'UNLOCKED' | 'LOCKED';
 }
 
-/** Compact branch reference used in paginated lists */
+/**
+ * Compact branch reference — returned by GET /api/v1/branches (paginated list).
+ * NOTE: latitude/longitude are NOT in the API response for this type.
+ * They are kept optional here so AdminMap / useAutoClockOut still compile
+ * when the caller manually enriches the object (e.g. from BranchDetailsResponse).
+ * Use branchStatus === 'LOCKED' to check lock state; isLocked is not sent by the API.
+ */
 export interface BranchResponse {
   id: number;
   displayName: string;
-  latitude: number;
-  longitude: number;
   radius: number;
-  /** Maps to branchStatus === 'LOCKED' from API */
-  isLocked: boolean;
-  branchStatus?: 'UNLOCKED' | 'LOCKED';
+  branchStatus: 'UNLOCKED' | 'LOCKED';
+  shiftStart?: string;
+  shiftEnd?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface BranchDetailsResponse {
   id: number;
   displayName: string;
-  latitude?: number;
-  longitude?: number;
+  latitude: number;
+  longitude: number;
   radius: number;
-  isLocked: boolean;
-  branchStatus?: 'UNLOCKED' | 'LOCKED';
+  branchStatus: 'UNLOCKED' | 'LOCKED';
+  autoClockOutDuration?: number;
+  shiftStart?: string;
+  shiftEnd?: string;
   totalAssignedStaff: number;
   currentActiveCount: number;
   assignedStaff: UserResponse[];
@@ -103,6 +115,7 @@ export interface SessionResponse {
   id: number;
   workDate: string;
   sessionOwner?: string;
+  arrivalStatus?: 'EARLY' | 'ON_TIME' | 'LATE';
   status: 'ACTIVE' | 'COMPLETED';
   movements: ClockEventResponse[];
 }
@@ -114,17 +127,50 @@ export interface AdminSessionResponse extends SessionResponse {
 export interface ClockInRequest {
   latitude: number;
   longitude: number;
+  /** Required by new API */
+  accuracy: number;
+  isDelaySync?: boolean;
+  deviceId?: string;
+  batteryLevel?: number;
+  signalStrength?: number;
+  clientTimeStamp?: string;
 }
 
 export interface ClockOutRequest {
   clockOutType: 'MANUAL' | 'AUTOMATIC';
+  /** Required by new API */
+  latitude: number;
+  /** Required by new API */
+  longitude: number;
+}
+
+// ─── Location ─────────────────────────────────────────────────────────────────
+
+export interface LocationRequest {
+  latitude: number;
+  longitude: number;
+}
+
+export interface LocationResponse {
+  latitude: number;
+  longitude: number;
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+export interface AuditLogResponse {
+  deviceId: string;
+  batteryLevel: number;
+  signalStrength: number;
+  gpsAccuracy: number;
+  clientTimeStamp: string;
+  verified: boolean;
 }
 
 // ─── Geolocation ──────────────────────────────────────────────────────────────
 export interface GeoPosition {
   latitude: number;
   longitude: number;
-  /** Accuracy in metres — populated by useGeolocation, may be absent elsewhere */
   accuracy?: number;
 }
 
@@ -149,20 +195,12 @@ export interface ApiResponse<T> {
 
 // ─── WebSocket / Live Map ─────────────────────────────────────────────────────
 export interface AdminMapPayload {
-  /** May be absent on some backend versions — use email as the canonical key */
   userId?: number;
   displayName: string;
   email: string;
   latitude: number;
   longitude: number;
-  /**
-   * The Java backend sends space-separated values: "CLOCKED IN" | "CLOCKED OUT"
-   * but may also send underscore variants.  resolveStatus() in useAdminWebSocket
-   * normalises both forms — keep the union loose so TypeScript doesn't reject
-   * the raw payload before normalisation.
-   */
   sessionState: string;
-  /** May be absent for ADMIN-scoped payloads that don't include branch metadata */
   branchId?: number;
   branchName?: string;
   timeStamp: string;

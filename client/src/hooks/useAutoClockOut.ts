@@ -5,29 +5,18 @@ import type { BranchResponse, GeoPosition } from '../types';
 
 interface UseAutoClockOutOptions {
   position: GeoPosition | null;
-  /**
-   * All branches the user can clock into.
-   * The hook checks if the user is within ANY branch radius.
-   * If they leave ALL branches, the grace-period timer starts.
-   */
   branches: BranchResponse[];
   isClockedIn: boolean;
   activeSessionId: number | null;
   onSuccess: () => void;
   onFallbackManual: () => void;
   onNotify: (type: 'success' | 'error' | 'warning', msg: string) => void;
-  /**
-   * Called every second while the auto clock-out countdown is running.
-   * Receives the remaining seconds, or null when the countdown is not active.
-   */
   onCountdownChange?: (secondsLeft: number | null) => void;
 }
 
 const MAX_RETRIES = 3;
-/** Default grace period (ms) when no autoClockOutDuration is set on any branch */
-const DEFAULT_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_DELAY_MS = 5 * 60 * 1000;
 
-/** Returns the minimum autoClockOutDuration across all branches (strictest rule). */
 function resolveDelayMs(branches: BranchResponse[]): number {
   const durations = branches
     .map((b) => (b as BranchResponse & { autoClockOutDuration?: number }).autoClockOutDuration)
@@ -36,9 +25,9 @@ function resolveDelayMs(branches: BranchResponse[]): number {
   return Math.min(...durations);
 }
 
-/** Returns true if the position is within ANY branch radius. */
 function isInsideAnyBranch(position: GeoPosition, branches: BranchResponse[]): boolean {
   return branches.some((b) => {
+    if (b.latitude == null || b.longitude == null) return false;
     const dist = haversineDistance(position.latitude, position.longitude, b.latitude, b.longitude);
     return dist <= b.radius;
   });
@@ -61,6 +50,9 @@ export function useAutoClockOut({
   // Always-current mirrors
   const branchesRef = useRef(branches);
   useEffect(() => { branchesRef.current = branches; }, [branches]);
+
+  const positionRef = useRef(position);
+  useEffect(() => { positionRef.current = position; }, [position]);
 
   const onNotifyRef = useRef(onNotify);
   useEffect(() => { onNotifyRef.current = onNotify; }, [onNotify]);
@@ -106,7 +98,6 @@ export function useAutoClockOut({
     stopTicker();
   }, [stopTicker]);
 
-  // Reset outside-tracking when the session ends (user clocked out manually).
   const prevClockedInRef = useRef(isClockedIn);
   useEffect(() => {
     if (prevClockedInRef.current && !isClockedIn) {
@@ -116,11 +107,17 @@ export function useAutoClockOut({
     prevClockedInRef.current = isClockedIn;
   }, [isClockedIn, clearTimer]);
 
+  // FIXED: clockOut now requires latitude + longitude
   const attemptClockOut = useCallback(async () => {
     let retries = 0;
     while (retries < MAX_RETRIES) {
       try {
-        await clockOut({ clockOutType: 'AUTOMATIC' });
+        const pos = positionRef.current;
+        await clockOut({
+          clockOutType: 'AUTOMATIC',
+          latitude:  pos?.latitude  ?? 0,
+          longitude: pos?.longitude ?? 0,
+        });
         onSuccessRef.current();
         onNotifyRef.current('success', 'Clocked out automatically.');
         return;
@@ -139,7 +136,6 @@ export function useAutoClockOut({
     const inside = isInsideAnyBranch(position, branches);
 
     if (!inside && !isOutsideRef.current) {
-      // Newly outside ALL branches — start the grace-period timer
       isOutsideRef.current = true;
       const delayMs = resolveDelayMs(branches);
       const minutes = Math.round(delayMs / 60000);
@@ -150,7 +146,6 @@ export function useAutoClockOut({
       startTicker(delayMs);
       timerRef.current = setTimeout(attemptClockOut, delayMs);
     } else if (inside && isOutsideRef.current) {
-      // Back inside a branch — cancel everything
       isOutsideRef.current = false;
       clearTimer();
       onNotifyRef.current('success', 'Welcome back! Clock-out cancelled.');
@@ -158,7 +153,6 @@ export function useAutoClockOut({
   }, [position, branches, isClockedIn, attemptClockOut, clearTimer, startTicker]);
 
   // ─── Branches-change re-evaluation ───────────────────────────────────────
-  // When radii change (e.g. admin update), re-check if user is now inside/outside.
   const prevBranchesRef = useRef(branches);
   useEffect(() => {
     prevBranchesRef.current = branches;
@@ -170,13 +164,10 @@ export function useAutoClockOut({
       clearTimer();
       onNotifyRef.current('success', 'Welcome back inside the new zone! Clock-out cancelled.');
     }
-    // If still outside, the existing timer continues; no restart needed.
   }, [branches, isClockedIn, position, clearTimer]);
 
-  // Cleanup on unmount
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  // Expose the delay in seconds for the countdown bar in UserDashboard
   const delaySeconds = resolveDelayMs(branches) / 1000;
   return { delaySeconds };
 }

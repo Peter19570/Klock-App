@@ -26,7 +26,7 @@ function PasswordChangeForm({ userId }: { userId: number }) {
     setIsLoading(true);
     setError(null);
     try {
-      await api.post(`/api/auth/${userId}/password`, { password });
+      await api.post(`/api/v1/auth/reset-password`, { password });
       // Re-fetch user to get cleared mustChangePassword flag, then redirect
       const me = await api.get("/api/v1/users/me");
       const userData = me.data.data;
