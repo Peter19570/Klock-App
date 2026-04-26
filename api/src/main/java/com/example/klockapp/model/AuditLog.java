@@ -24,4 +24,5 @@ public class AuditLog extends BaseEntity {
     private Boolean verified;
     private Long userId;
     private String name;
+    private Boolean isDelaySync;
 }

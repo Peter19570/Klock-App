@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.coyote.BadRequestException;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -126,15 +127,7 @@ public class AttendanceService {
         session.setStatus(SessionStatus.ACTIVE);
 
         // Log to the database, Super admins will have access to this data
-        AuditLog auditLog = new AuditLog();
-        auditLog.setDeviceId(request.deviceId());
-        auditLog.setBatteryLevel(request.batteryLevel());
-        auditLog.setSignalStrength(request.signalStrength());
-        auditLog.setGpsAccuracy(request.accuracy());
-        auditLog.setClientTimeStamp(request.clientTimeStamp());
-        auditLog.setVerified(true);
-        auditLog.setUserId(principal.user().getId());
-        auditLog.setName(principal.user().getFullName());
+        AuditLog auditLog = getAuditLog(principal, request);
         auditLogRepo.save(auditLog);
 
         // Log template for successful clock-in
@@ -147,6 +140,23 @@ public class AttendanceService {
                 request.accuracy());
 
         return clockEventMapper.toDto(clockEventRepo.save(event));
+    }
+
+    /**
+     * Helper to log the details of the clock-event
+     * */
+    private static @NonNull AuditLog getAuditLog(CustomUserPrincipal principal, ClockInRequest request) {
+        AuditLog auditLog = new AuditLog();
+        auditLog.setDeviceId(request.deviceId());
+        auditLog.setBatteryLevel(request.batteryLevel());
+        auditLog.setSignalStrength(request.signalStrength());
+        auditLog.setGpsAccuracy(request.accuracy());
+        auditLog.setClientTimeStamp(request.clientTimeStamp());
+        auditLog.setVerified(true);
+        auditLog.setUserId(principal.user().getId());
+        auditLog.setName(principal.user().getFullName());
+        auditLog.setIsDelaySync(request.isDelaySync());
+        return auditLog;
     }
 
     /**
@@ -284,7 +294,16 @@ public class AttendanceService {
 
     private void writeToCsv(Writer writer, Stream<WorkSession> sessions) {
         CSVFormat format = CSVFormat.DEFAULT.builder()
-                .setHeader("Date", "Staff Name", "Status", "Clock In", "Clock Out", "Type", "Branch")
+                .setHeader(
+                        "Date",
+                        "Staff Name",
+                        "Session Status",
+                        "Clock In",
+                        "Clock Out",
+                        "Type",
+                        "Branch",
+                        "Arrival Status"
+                )
                 .build();
 
         try (CSVPrinter printer = new CSVPrinter(writer, format)) {
@@ -300,7 +319,8 @@ public class AttendanceService {
                                 event.getClockInTime(),
                                 event.getClockOutTime() != null ? event.getClockOutTime() : "STILL IN",
                                 event.getClockOutType(),
-                                event.getBranch().getDisplayName()
+                                event.getBranch().getDisplayName(),
+                                session.getArrivalStatus()
                         );
                     } catch (IOException e) {
                         throw new WriteToCSVException("CSV Row Write Error", e.getMessage());

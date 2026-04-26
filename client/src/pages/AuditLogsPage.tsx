@@ -60,7 +60,7 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
         <div className="flex-grow min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <p className="text-sm font-medium text-card-foreground leading-tight">
-              {log.fullName || '—'}
+              {log.name || '—'}
             </p>
             {/* Desktop: date inline on first row */}
             <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
@@ -123,7 +123,7 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">
                   <User className="h-3 w-3" /> User
                 </p>
-                <p className="text-xs text-foreground font-medium truncate">{log.fullName || '—'}</p>
+                <p className="text-xs text-foreground font-medium truncate">{log.name || '—'}</p>
               </div>
               <div className="rounded-lg bg-muted/40 px-2.5 py-2">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">

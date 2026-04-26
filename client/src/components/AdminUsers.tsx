@@ -563,28 +563,29 @@ export default function AdminUsers({
                     className="flex-grow text-left min-w-0"
                     onClick={() => handleCardClick(user.id)}
                   >
-                    <div className="flex items-center gap-3">
-                      <p className="text-sm font-medium text-card-foreground truncate leading-tight">
-                        {user.fullName}
-                        {isLoadingThisUser && (
-                          <span className="ml-2 text-xs text-muted-foreground animate-pulse">…</span>
-                        )}
-                      </p>
-                      {/* Desktop: branch name inline on first row */}
-                      {user.homeBranchName && (
-                        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded-full shrink-0">
-                          📍 {user.homeBranchName}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                      {user.email}
-                      {/* Mobile: branch on same line */}
-                      {user.homeBranchName && (
-                        <span className="sm:hidden"> · {user.homeBranchName}</span>
+                    <p className="text-sm font-medium text-card-foreground truncate leading-tight">
+                      {user.fullName}
+                      {isLoadingThisUser && (
+                        <span className="ml-2 text-xs text-muted-foreground animate-pulse">…</span>
                       )}
                     </p>
+                    <p className="text-sm text-muted-foreground truncate mt-0.5">
+                      {user.email}
+                    </p>
+                    {/* Mobile: branch under name */}
+                    {user.homeBranchName && (
+                      <p className="sm:hidden text-xs text-muted-foreground/70 truncate mt-0.5">
+                        📍 {user.homeBranchName}
+                      </p>
+                    )}
                   </button>
+
+                  {/* Desktop: branch name column — sits between text and actions */}
+                  {user.homeBranchName && (
+                    <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/70 shrink-0 max-w-[160px] truncate">
+                      📍 {user.homeBranchName}
+                    </span>
+                  )}
 
                   {/* Actions — revealed on hover */}
                   <div

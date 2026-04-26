@@ -11,6 +11,6 @@ public record AuditLogResponse(
         LocalTime clientTimeStamp,
         Boolean verified,
         Instant createdAt,
-        String fullName
+        String name
 ) {
 }

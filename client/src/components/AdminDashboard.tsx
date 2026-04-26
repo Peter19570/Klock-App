@@ -910,30 +910,10 @@ export function AdminDashboard() {
                                 className="flex-grow text-left min-w-0"
                                 onClick={() => setSelectedBranch(b)}
                               >
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-medium text-card-foreground leading-tight">{b.displayName}</p>
-                                  {b.branchStatus === 'LOCKED' ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30 shrink-0">
-                                      <Lock className="h-2.5 w-2.5" /> Locked
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30 shrink-0">
-                                      <Unlock className="h-2.5 w-2.5" /> Unlocked
-                                    </span>
-                                  )}
-                                  {/* Desktop: radius badge inline */}
-                                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
-                                    {b.radius}m radius
-                                  </span>
-                                  {/* Desktop: shift times badge inline */}
-                                  {(b.shiftStart || b.shiftEnd) && (
-                                    <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0">
-                                      🕐 {b.shiftStart ?? '?'} – {b.shiftEnd ?? '?'}
-                                    </span>
-                                  )}
-                                </div>
-                                {/* Mobile: radius + shift on second line */}
-                                <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5 sm:hidden">
+                                <p className="text-sm font-medium text-card-foreground truncate leading-tight">
+                                  {b.displayName}
+                                </p>
+                                <p className="text-sm text-muted-foreground truncate mt-0.5">
                                   {b.radius}m radius
                                   {b.shiftStart && b.shiftEnd
                                     ? ` · ${b.shiftStart} – ${b.shiftEnd}`
@@ -943,13 +923,20 @@ export function AdminDashboard() {
                                     ? ` · until ${b.shiftEnd}`
                                     : ' · No shift set'}
                                 </p>
-                                {/* Desktop: show "No shift set" only when nothing */}
-                                {!b.shiftStart && !b.shiftEnd && (
-                                  <p className="hidden sm:block text-sm text-muted-foreground/50 line-clamp-1 mt-0.5">
-                                    No shift times set
-                                  </p>
-                                )}
                               </button>
+
+                              {/* Desktop: status badge — sits between text and actions */}
+                              <div className="hidden sm:flex shrink-0">
+                                {b.branchStatus === 'LOCKED' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30">
+                                    <Lock className="h-2.5 w-2.5" /> Locked
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30">
+                                    <Unlock className="h-2.5 w-2.5" /> Unlocked
+                                  </span>
+                                )}
+                              </div>
 
                               {/* Actions */}
                               <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">

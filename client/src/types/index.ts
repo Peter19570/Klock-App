@@ -181,7 +181,7 @@ export interface AuditLogResponse {
   clientTimeStamp: string;
   verified: boolean;
   createdAt: string;
-  fullName: string;
+  name: string;
 }
 
 // ─── Geolocation ──────────────────────────────────────────────────────────────

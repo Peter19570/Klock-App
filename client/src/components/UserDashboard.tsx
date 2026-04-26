@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, MapPin, AlertCircle, ChevronRight, Radio, Timer, Building2 } from 'lucide-react';
+import { LogIn, LogOut, MapPin, AlertCircle, ChevronRight, Radio, Timer, Building2, WifiOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,6 +26,8 @@ import {
   getActiveMovement,
 } from '../services/sessionService';
 import { getAllBranches } from '../services/branchService';
+import { getPendingCount } from '../services/offlineQueueService';
+import { flushOfflineClockInQueue } from '../hooks/useAutoClockIn';
 import type { SessionResponse, BranchResponse } from '../types';
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -68,6 +70,22 @@ export function UserDashboard() {
   const [sessionDoneForToday, setSessionDoneForToday] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
   const [hooksReady, setHooksReady]           = useState(false);
+  const [pendingCount, setPendingCount]       = useState(() => getPendingCount());
+  const [isSyncing, setIsSyncing]             = useState(false);
+
+  // ─── Keep pending-queue count in sync with localStorage ───────────────────
+  useEffect(() => {
+    const refresh = () => setPendingCount(getPendingCount());
+    // Storage events fire when another tab writes; also poll on online/offline
+    window.addEventListener('storage', refresh);
+    window.addEventListener('online', refresh);
+    window.addEventListener('offline', refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('offline', refresh);
+    };
+  }, []);
 
   const reClockInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionRef       = useRef(position);
@@ -328,6 +346,22 @@ export function UserDashboard() {
     if (reClockInTimerRef.current) clearTimeout(reClockInTimerRef.current);
   }, []);
 
+  // ─── Manual flush of offline queue ────────────────────────────────────────
+  const handleManualFlush = useCallback(async () => {
+    if (isSyncing || !navigator.onLine) return;
+    setIsSyncing(true);
+    try {
+      await flushOfflineClockInQueue((count) => {
+        notify('success', `Synced ${count} offline clock-in${count !== 1 ? 's' : ''}.`);
+        setPendingCount(getPendingCount());
+        if (count > 0) fetchSessions();
+      });
+    } finally {
+      setPendingCount(getPendingCount());
+      setIsSyncing(false);
+    }
+  }, [isSyncing, notify, fetchSessions]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -385,6 +419,41 @@ export function UserDashboard() {
           >
             <AlertCircle className="w-4 h-4 shrink-0" />
             {geoError} — Location tracking required for auto clock-in/out.
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Offline / delayed-sync banner */}
+      <AnimatePresence>
+        {pendingCount > 0 && (
+          <motion.div
+            key="offline-banner"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-center gap-3 p-4 rounded-xl border border-amber-400/40 bg-amber-400/10 text-sm"
+          >
+            <WifiOff className="w-4 h-4 shrink-0 text-amber-500" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-amber-600 dark:text-amber-400">
+                {pendingCount} clock-in{pendingCount !== 1 ? 's' : ''} pending sync
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {navigator.onLine
+                  ? 'Connection restored — tap Sync Now to submit.'
+                  : 'Offline — will sync automatically when back online.'}
+              </p>
+            </div>
+            {navigator.onLine && (
+              <button
+                onClick={handleManualFlush}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 transition-colors disabled:opacity-50 shrink-0"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing…' : 'Sync Now'}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
