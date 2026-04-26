@@ -3,7 +3,7 @@ import * as ReactDOM from 'react-dom';
 import {
   Search, Trash2, ChevronLeft, ChevronRight, User, Plus,
   ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
-  FileText,
+  FileText, MapPin, Navigation,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/services/api';
 import { transferUser } from '@/services/userService';
-import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse } from '@/types';
+import { getLocationHistory } from '@/services/sessionService';
+import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse, LocationResponse } from '@/types';
 import UserSessionsPage from './UserSessionsPage';
 import UserLogsPage from '../pages/UserLogsPage';
 
@@ -297,9 +298,156 @@ function TransferBranchModal({
   );
 }
 
+// ─── Location History Map ──────────────────────────────────────────────────────
+
+interface UserLocationHistoryProps {
+  userId: number;
+  user: UserDetailResponse;
+  onBack: () => void;
+}
+
+function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps) {
+  const [points, setPoints]   = React.useState<LocationResponse[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError]     = React.useState<string | null>(null);
+  const svgRef                = React.useRef<SVGSVGElement>(null);
+
+  React.useEffect(() => {
+    setLoading(true);
+    setError(null);
+    getLocationHistory(userId)
+      .then((res) => setPoints(res.data.data ?? []))
+      .catch(() => setError('Failed to load location history.'))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  // Project lat/lng into SVG space
+  const projected = React.useMemo(() => {
+    if (points.length === 0) return [];
+    const lats = points.map((p) => p.latitude);
+    const lngs = points.map((p) => p.longitude);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const pad = 40;
+    const W = 540, H = 320;
+    const rangeX = maxLng - minLng || 0.001;
+    const rangeY = maxLat - minLat || 0.001;
+    return points.map((p) => ({
+      x: pad + ((p.longitude - minLng) / rangeX) * (W - pad * 2),
+      // Flip Y: larger lat = higher on screen
+      y: pad + ((maxLat - p.latitude) / rangeY) * (H - pad * 2),
+    }));
+  }, [points]);
+
+  const polyline = projected.map((p) => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground truncate flex items-center gap-2">
+            <Navigation className="h-4 w-4 text-primary shrink-0" />
+            Location History — {user.firstName} {user.lastName}
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Movement trail (all recorded pings)</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12 text-sm text-destructive border border-dashed border-destructive/30 rounded-xl">
+          {error}
+        </div>
+      ) : points.length === 0 ? (
+        <div className="text-center py-12 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+          No location history recorded for this user.
+        </div>
+      ) : (
+        <>
+          {/* Map */}
+          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+            <svg
+              ref={svgRef}
+              viewBox="0 0 540 320"
+              className="w-full"
+              style={{ background: 'var(--muted)' }}
+            >
+              {/* Grid lines */}
+              {[1,2,3].map((i) => (
+                <React.Fragment key={i}>
+                  <line x1={0} y1={i * 80} x2={540} y2={i * 80} stroke="var(--border)" strokeWidth={0.5} />
+                  <line x1={i * 135} y1={0} x2={i * 135} y2={320} stroke="var(--border)" strokeWidth={0.5} />
+                </React.Fragment>
+              ))}
+
+              {/* Trail line */}
+              {projected.length > 1 && (
+                <polyline
+                  points={polyline}
+                  fill="none"
+                  stroke="var(--primary)"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={0.8}
+                />
+              )}
+
+              {/* Points */}
+              {projected.map((p, i) => {
+                const isFirst = i === 0;
+                const isLast  = i === projected.length - 1;
+                return (
+                  <circle
+                    key={i}
+                    cx={p.x}
+                    cy={p.y}
+                    r={isFirst || isLast ? 7 : 4}
+                    fill={isFirst ? 'var(--primary)' : isLast ? '#10b981' : 'var(--primary)'}
+                    opacity={isFirst || isLast ? 1 : 0.5}
+                  />
+                );
+              })}
+
+              {/* Start / End labels */}
+              {projected.length > 0 && (
+                <>
+                  <text x={projected[0].x + 10} y={projected[0].y + 4} fontSize={10} fill="var(--primary)" fontWeight="600">Start</text>
+                  <text x={projected[projected.length - 1].x + 10} y={projected[projected.length - 1].y + 4} fontSize={10} fill="#10b981" fontWeight="600">End</text>
+                </>
+              )}
+            </svg>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-muted p-3">
+              <p className="text-xs text-muted-foreground">Total Points</p>
+              <p className="text-sm font-semibold text-foreground mt-0.5">{points.length}</p>
+            </div>
+            <div className="rounded-xl bg-muted p-3">
+              <p className="text-xs text-muted-foreground">Coordinates</p>
+              <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                {points[points.length - 1]?.latitude.toFixed(4)}°, {points[points.length - 1]?.longitude.toFixed(4)}°
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-type UserView = 'list' | 'sessions' | 'logs';
+type UserView = 'list' | 'sessions' | 'logs' | 'location';
 
 export default function AdminUsers({
   isSuperAdmin = false,
@@ -416,6 +564,16 @@ export default function AdminUsers({
   };
 
   // ── User detail views ──────────────────────────────────────────────────────
+  if (selectedUser && userView === 'location') {
+    return (
+      <UserLocationHistory
+        userId={selectedUser.id}
+        user={selectedUser}
+        onBack={() => setUserView('sessions')}
+      />
+    );
+  }
+
   if (selectedUser && userView === 'logs') {
     return (
       <UserLogsPage
@@ -433,17 +591,28 @@ export default function AdminUsers({
         user={selectedUser}
         onBack={handleBackToList}
         canUndo={false}
-        // Extra action bar: Logs button (no Create User shown here)
+        // Extra action bar: Logs + Location History buttons
         headerActions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 h-9"
-            onClick={() => setUserView('logs')}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Logs
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 h-9"
+              onClick={() => setUserView('location')}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              View Location History
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 h-9"
+              onClick={() => setUserView('logs')}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Logs
+            </Button>
+          </div>
         }
       />
     );
@@ -544,7 +713,7 @@ export default function AdminUsers({
                   animate={{ opacity: 1, y: 0, scale: isLoadingThisUser ? 0.98 : 1 }}
                   exit={{ opacity: 0, x: 20, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(idx * 0.03, 0.15) }}
-                  className={`group relative flex items-center gap-4 p-2 rounded-lg hover:bg-accent ${
+                  className={`group relative flex items-center gap-4 p-2 rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors ${
                     isLoadingThisUser ? 'opacity-60 pointer-events-none' : ''
                   }`}
                   role="listitem"

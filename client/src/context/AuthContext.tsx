@@ -2,6 +2,34 @@ import * as React from "react";
 import api, { tokenStore, clearLoggingOutFlag } from "@/services/api";
 import type { UserDetailResponse, AuthRequest } from "@/types";
 
+// ── Device registration helpers ───────────────────────────────────────────────
+
+/** Returns a stable device ID stored in localStorage, creating one if absent. */
+function getOrCreateDeviceId(): string {
+  const key = "klock-device-id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
+/**
+ * If the user's deviceId is null (first login on this device), register the
+ * current device with the backend — mirrors the mustChangePassword redirect pattern.
+ */
+async function ensureDeviceRegistered(userData: UserDetailResponse): Promise<void> {
+  // `deviceId` is optional on the type; null/undefined means not yet registered
+  if ((userData as UserDetailResponse & { deviceId?: string | null }).deviceId != null) return;
+  try {
+    const deviceId = getOrCreateDeviceId();
+    await api.post("/api/v1/users/device", { deviceId });
+  } catch (err) {
+    console.warn("Device registration failed (non-fatal):", err);
+  }
+}
+
 interface AuthContextValue {
   user: UserDetailResponse | null;
   loading: boolean;
@@ -66,7 +94,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { accessToken, refreshToken } = res.data.data;
     tokenStore.save(accessToken, refreshToken);
     const userData = await fetchUser();
-    if (userData) handleHardRedirect(userData);
+    if (userData) {
+      await ensureDeviceRegistered(userData);
+      handleHardRedirect(userData);
+    }
   };
 
   // FIXED: /api/auth/logout → /api/v1/auth/logout

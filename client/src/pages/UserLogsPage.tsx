@@ -61,21 +61,64 @@ const TYPE_CONFIG: Record<AuditLogType, {
   },
 };
 
+/**
+ * Java LocalTime comes over the wire in two shapes depending on Jackson config:
+ *   array  → [9, 30, 0]  (hour, minute, second)
+ *   object → { hour: 9, minute: 30, second: 0, nano: 0 }
+ * We detect both and format to HH:mm.
+ */
+function formatAuditValue(value: unknown): string {
+  if (value == null || value === '') return '—';
+
+  // Array shape: [H, M] or [H, M, S] — all numbers, H 0-23, M 0-59
+  if (Array.isArray(value)) {
+    const [h, m] = value as number[];
+    if (
+      value.length >= 2 &&
+      value.every((v) => typeof v === 'number') &&
+      h >= 0 && h <= 23 &&
+      m >= 0 && m <= 59
+    ) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    return value.join(', ');
+  }
+
+  // Object shape: { hour, minute, second?, nano? }
+  if (typeof value === 'object') {
+    const t = value as Record<string, unknown>;
+    if (
+      typeof t.hour === 'number' &&
+      typeof t.minute === 'number' &&
+      t.hour >= 0 && t.hour <= 23 &&
+      t.minute >= 0 && t.minute <= 59
+    ) {
+      return `${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`;
+    }
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
 function AuditInfoGrid({ auditInfo }: { auditInfo: Record<string, unknown> }) {
   const entries = Object.entries(auditInfo);
   if (entries.length === 0) return null;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 px-2 pb-3">
-      {entries.map(([key, value]) => (
-        <div key={key} className="rounded-lg bg-muted/40 px-2.5 py-2">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
-            {key.replace(/([A-Z])/g, ' $1').trim()}
-          </p>
-          <p className="text-xs text-foreground font-medium truncate" title={String(value ?? '—')}>
-            {value != null && value !== '' ? String(value) : '—'}
-          </p>
-        </div>
-      ))}
+      {entries.map(([key, value]) => {
+        const display = formatAuditValue(value);
+        return (
+          <div key={key} className="rounded-lg bg-muted/40 px-2.5 py-2">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+              {key.replace(/([A-Z])/g, ' $1').trim()}
+            </p>
+            <p className="text-xs text-foreground font-medium truncate" title={display}>
+              {display}
+            </p>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -98,7 +141,7 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, x: 20, scale: 0.95 }}
       transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(index * 0.03, 0.2) }}
-      className="group rounded-lg hover:bg-accent overflow-hidden"
+      className="group rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors overflow-hidden"
       role="listitem"
     >
       <button

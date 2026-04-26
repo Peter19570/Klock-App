@@ -81,6 +81,8 @@ export interface BranchResponse {
   shiftEnd?: string;
   latitude?: number;
   longitude?: number;
+  /** Enriched client-side from BranchDetailsResponse — used by useAutoClockOut */
+  autoClockOutDuration?: number;
 }
 
 export interface BranchDetailsResponse {

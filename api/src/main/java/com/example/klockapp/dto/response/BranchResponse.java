@@ -11,6 +11,7 @@ public record BranchResponse(
         Double latitude,
         Double longitude,
         BranchStatus branchStatus,
+        Long autoClockOutDuration,
         LocalTime shiftStart,
         LocalTime shiftEnd
 ) {}

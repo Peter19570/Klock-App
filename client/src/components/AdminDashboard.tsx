@@ -897,7 +897,7 @@ export function AdminDashboard() {
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, x: 20, scale: 0.95 }}
                               transition={{ duration: 0.2, ease: 'easeOut', delay: Math.min(idx * 0.03, 0.15) }}
-                              className="group relative flex items-center gap-4 p-2 rounded-lg hover:bg-accent"
+                              className="group relative flex items-center gap-4 p-2 rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors"
                               role="listitem"
                             >
                               {/* Icon */}

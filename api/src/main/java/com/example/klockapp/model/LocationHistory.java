@@ -27,7 +27,10 @@ public class LocationHistory extends BaseEntity {
     @Column
     private Boolean used = false;
 
+    @Column
+    private Long userId;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "work_session_id")
     private WorkSession workSession;
 }

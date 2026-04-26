@@ -53,12 +53,14 @@ const MANUAL_RECLOCKING_DELAY_MS = 1 * 60 * 1000;
 export function UserDashboard() {
   const { user }   = useAuth();
   const navigate   = useNavigate();
-  const { position, error: geoError } = useGeolocation();
   const toastRef   = useRef<SplashedPushNotificationsHandle>(null);
 
   const [sessions, setSessions]               = useState<SessionResponse[]>([]);
   const [branches, setBranches]               = useState<BranchResponse[]>([]);
   const [isClockedIn, setIsClockedIn]         = useState(false);
+
+  // useGeolocation must come AFTER isClockedIn is declared
+  const { position, error: geoError } = useGeolocation(isClockedIn);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [activeBranchName, setActiveBranchName] = useState<string | null>(null);
   const [loading, setLoading]                 = useState(true);

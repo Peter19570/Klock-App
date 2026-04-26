@@ -92,7 +92,7 @@ function BranchRow({ branch, details, index }: BranchRowProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{branch.displayName}</p>
-          {branch.isLocked && (
+          {branch.branchStatus === 'LOCKED' && (
             <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/25 shrink-0">
               <Lock className="h-2.5 w-2.5" />Locked
             </span>
@@ -352,7 +352,7 @@ export default function AdminOverview({
         totalAssigned += d.totalAssignedStaff;
         totalActive   += d.currentActiveCount;
       }
-      if (b.isLocked) locked++;
+      if (b.branchStatus === 'LOCKED') locked++;
     });
     return { totalAssigned, totalActive, locked };
   }, [branches, adminBranch, branchDetails, isSuperAdmin]);

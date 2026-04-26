@@ -75,7 +75,7 @@ public class LocationHistoryService {
                         "ROLE_SUPER_ADMIN"));
 
         List<LocationHistory> locationHistories = locationHistoryRepo
-                .findAll((Sort) LocationHistorySpecification.withFilter(filter));
+                .findAll(LocationHistorySpecification.withFilter(filter));
 
         return locationMapper.toListDto(locationHistories);
     }

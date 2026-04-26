@@ -10,6 +10,7 @@ public record UserDetailResponse(
         String firstName,
         String lastName,
         String picture,
+        String deviceId,
         UserRole role,
         String homeBranchName, // Context for the user's base of operations
         Boolean mustChangePassword,
