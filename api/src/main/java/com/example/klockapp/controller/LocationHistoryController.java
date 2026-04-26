@@ -27,7 +27,7 @@ public class LocationHistoryController {
     public ResponseEntity<Void> saveUserLocation(
             @RequestBody @Valid LocationRequest request,
             @AuthenticationPrincipal CustomUserPrincipal principal){
-        locationHistoryService.createLocationHistory(request, principal);
+        locationHistoryService.createLocationHistory(request, principal.user());
         return ResponseEntity.noContent().build();
     }
 

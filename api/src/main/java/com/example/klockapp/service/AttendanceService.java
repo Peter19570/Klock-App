@@ -4,17 +4,13 @@ import com.example.klockapp.dto.internal.CustomUserPrincipal;
 import com.example.klockapp.dto.request.ClockInRequest;
 import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
-import com.example.klockapp.dto.response.LocationResponse;
 import com.example.klockapp.dto.response.SessionResponse;
-import com.example.klockapp.enums.ArrivalStatus;
-import com.example.klockapp.enums.ClockOutType;
-import com.example.klockapp.enums.SessionStatus;
-import com.example.klockapp.enums.UserRole;
+import com.example.klockapp.enums.*;
 import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.exception.custom.WriteToCSVException;
 import com.example.klockapp.filter.SessionFilter;
 import com.example.klockapp.mapper.ClockEventMapper;
-import com.example.klockapp.mapper.SessionMapper;
+import com.example.klockapp.mapper.WorkSessionMapper;
 import com.example.klockapp.model.*;
 import com.example.klockapp.repo.*;
 import com.example.klockapp.specification.WorkSessionSpecifications;
@@ -36,6 +32,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -49,7 +46,7 @@ public class AttendanceService {
     private final ClockEventRepo clockEventRepo;
     private final AuditLogRepo auditLogRepo;
     private final BranchRepo branchRepo;
-    private final SessionMapper sessionMapper;
+    private final WorkSessionMapper sessionMapper;
     private final ClockEventMapper clockEventMapper;
 
     /**
@@ -58,9 +55,8 @@ public class AttendanceService {
      * 2. Enforces "No Double Clock-In" guardrail.
      * 3. Manages WorkSession (Parent) and ClockEvent (Child).
      */
-    public ClockEventResponse clockIn(CustomUserPrincipal principal, ClockInRequest request)
+    public ClockEventResponse clockIn(User user, ClockInRequest request)
             throws BadRequestException {
-        User user = principal.user();
 
         // Calculate time diff btw the client and server times
         long diff = Math.abs(Duration.between(request.clientTimeStamp(), LocalTime.now()).getSeconds());
@@ -91,12 +87,24 @@ public class AttendanceService {
             throw new BadRequestException("Cannot clock-in at a branch past its end-shift");
         }
 
-        // Ensures user is clocking in with their own device
-        if (!(principal.user().getDeviceId().equals(request.deviceId()))){
-            log.warn("This device, {} isn’t linked to user id, {}.",
-                    request.deviceId(), principal.user().getId());
-            // throw new BadRequestException("This device isn’t linked to your account.");
+        // Log user clock-in with a different device
+        if (!(user.getDeviceId().equals(request.deviceId()))){
+            AuditLog auditLog = AuditLog.builder()
+                    .fullName(user.getFullName())
+                    .userId(user.getId())
+                    .type(AuditOption.DIFFERENT_DEVICE_DETECT)
+                    .auditInfo(Map.of(
+                            "savedDeviceId", user.getDeviceId(),
+                            "clockInDeviceId", request.deviceId()
+                    ))
+                    .build();
+            auditLogRepo.save(auditLog);
         }
+
+        // Calculate the distance btw the clock-in and clock-out
+        double distance = LocationUtility.calculateDistance(
+                request.latitude(), request.longitude(),
+                targetBranch.getLatitude(), targetBranch.getLongitude());
 
         // Validates request timestamps and rejects those outside the acceptable server time window.
         if (diff > 30) {
@@ -122,22 +130,14 @@ public class AttendanceService {
         event.setUser(user);
         event.setBranch(targetBranch);
         event.setClockInTime(Instant.now());
+        event.setEntryProximityDistance(distance);
 
         // Mark session as ACTIVE
         session.setStatus(SessionStatus.ACTIVE);
 
         // Log to the database, Super admins will have access to this data
-        AuditLog auditLog = getAuditLog(principal, request);
+        AuditLog auditLog = getAuditLog(user, request);
         auditLogRepo.save(auditLog);
-
-        // Log template for successful clock-in
-        log.info("UserId={} BatteryLevel={} DeviceId={} SignalStrength={} Timestamp={} Accuracy={}",
-                principal.user().getId(),
-                request.batteryLevel(),
-                request.deviceId(),
-                request.signalStrength(),
-                request.clientTimeStamp(),
-                request.accuracy());
 
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
@@ -145,18 +145,23 @@ public class AttendanceService {
     /**
      * Helper to log the details of the clock-event
      * */
-    private static @NonNull AuditLog getAuditLog(CustomUserPrincipal principal, ClockInRequest request) {
-        AuditLog auditLog = new AuditLog();
-        auditLog.setDeviceId(request.deviceId());
-        auditLog.setBatteryLevel(request.batteryLevel());
-        auditLog.setSignalStrength(request.signalStrength());
-        auditLog.setGpsAccuracy(request.accuracy());
-        auditLog.setClientTimeStamp(request.clientTimeStamp());
-        auditLog.setVerified(true);
-        auditLog.setUserId(principal.user().getId());
-        auditLog.setName(principal.user().getFullName());
-        auditLog.setIsDelaySync(request.isDelaySync());
-        return auditLog;
+    private static @NonNull AuditLog getAuditLog(User user, ClockInRequest request) {
+        return AuditLog.builder()
+                .fullName(user.getFullName())
+                .userId(user.getId())
+                .type(AuditOption.CLOCK_IN_SUCCESS)
+                .auditInfo(Map.of(
+                        "deviceId", request.deviceId(),
+                        "batteryLevel", request.batteryLevel(),
+                        "signalStrength", request.signalStrength(),
+                        "gpsAccuracy", request.accuracy(),
+                        "clientTimeStamp", request.clientTimeStamp(),
+                        "verified", true,
+                        "isDelayedSync", request.isDelaySync(),
+                        "latitude", request.latitude(),
+                        "longitude", request.longitude())
+                )
+                .build();
     }
 
     /**
@@ -179,23 +184,36 @@ public class AttendanceService {
      * Clock-Out Logic:
      * Closes the active movement.
      */
-    public ClockEventResponse clockOut(CustomUserPrincipal principal, ClockOutRequest request) {
+    public ClockEventResponse clockOut(User user, ClockOutRequest request) {
+
         ClockEvent activeEvent = clockEventRepo
-                .findByWorkSessionUserAndClockOutTimeIsNull(principal.user())
+                .findByWorkSessionUserAndClockOutTimeIsNull(user)
                 .orElseThrow(() -> new NotFoundException("No active clock-in session found."));
 
-        WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), principal.user())
+        WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), user)
                         .orElseThrow(() -> new NotFoundException("Work Session not found"));
 
+        // Calculate the distance btw the clock-in and clock-out
         double distance = LocationUtility.calculateDistance(
                 request.latitude(), request.longitude(),
                 activeEvent.getLatitudeIn(), activeEvent.getLongitudeIn());
 
         // Logs suspicious clock-outs
         if (distance > 100){
-            log.info("Suspicious clock-out activity detected.");
+            AuditLog auditLog = AuditLog.builder()
+                    .fullName(user.getFullName())
+                    .userId(user.getId())
+                    .type(AuditOption.SUSPICIOUS_CLOCK_OUT)
+                    .auditInfo(Map.of(
+                            "latitude", request.latitude(),
+                            "longitude", request.longitude(),
+                            "distanceBetweenClockEvents", distance
+                    ))
+                    .build();
+            auditLogRepo.save(auditLog);
         }
 
+        // Duration that flags clock-event
         Duration limit = Duration.ofMinutes(2);
         Duration eventDiff = Duration.between(activeEvent.getClockInTime(),Instant.now());
 
@@ -203,13 +221,39 @@ public class AttendanceService {
         if (eventDiff.compareTo(limit) < 0){
             clockEventRepo.delete(activeEvent);
             session.setStatus(SessionStatus.COMPLETED);
-            log.info("Ambiguous clock-event deleted");
+
+            AuditLog auditLog = AuditLog.builder()
+                    .fullName(user.getFullName())
+                    .userId(user.getId())
+                    .type(AuditOption.AMBIGUOUS_CLOCK_EVENT)
+                    .auditInfo(Map.of(
+                            "clock-event-duration", eventDiff
+                    ))
+                    .build();
+
+            auditLogRepo.save(auditLog);
             return null;
         }
 
+        activeEvent.setSiteDepartureDistance(distance);
         activeEvent.setClockOutTime(Instant.now());
         activeEvent.setClockOutType(request.clockOutType() != null ?
                 request.clockOutType() : ClockOutType.MANUAL);
+
+        // Log clock-out event
+        AuditLog auditLog = AuditLog.builder()
+                .fullName(user.getFullName())
+                .userId(user.getId())
+                .type(AuditOption.CLOCK_OUT_SUCCESS)
+                .auditInfo(Map.of(
+                        "latitude", request.latitude(),
+                        "longitude", request.longitude(),
+                        "clockOutType", request.clockOutType(),
+                        "distanceBetweenClockEvents", distance,
+                        "totalDistanceCovered", session.getTotalDistanceCovered()
+                ))
+                .build();
+        auditLogRepo.save(auditLog);
 
         session.setStatus(SessionStatus.COMPLETED);
         return clockEventMapper.toDto(clockEventRepo.save(activeEvent));

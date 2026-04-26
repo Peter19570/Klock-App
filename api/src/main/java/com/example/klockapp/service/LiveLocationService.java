@@ -40,9 +40,14 @@ public class LiveLocationService {
         User user = userRepo.findByEmail(principal.getName())
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        WorkSession workSession = workSessionRepo
-                .findByWorkDateAndUser(LocalDate.now(), user)
-                .orElseThrow(() -> new NotFoundException("Work session not found"));
+        var workSessionOptional = workSessionRepo
+                .findByWorkDateAndUser(LocalDate.now(), user);
+
+        if (workSessionOptional.isEmpty()){
+            return null;
+        }
+
+        WorkSession workSession = workSessionOptional.get();
 
         ArrivalStatus arrivalStatus = workSession.getArrivalStatus();
 

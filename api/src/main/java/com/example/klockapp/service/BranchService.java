@@ -71,6 +71,14 @@ public class BranchService {
                 .map(event -> userMapper.toDto(event.getUser()))
                 .toList();
 
+        Double avgDistance = clockEventRepo.getAverageClockInDistanceForBranch(branchId);
+
+        // If no one has clocked in yet, default to 0.0
+        double displayAvg = (avgDistance != null) ? avgDistance : 0.0;
+
+        // Logic for the dashboard "Health" status
+        String status = (displayAvg <= branch.getRadius()) ? "STABLE" : "DRIFTING";
+
         // 3. Return the Record using the full constructor
         return new BranchDetailsResponse(
                 branch.getId(),
@@ -82,6 +90,9 @@ public class BranchService {
                 branch.getLongitude(),
                 branch.getShiftStart(),
                 branch.getShiftEnd(),
+                avgDistance,
+                displayAvg,
+                status,
                 assignedStaff.size(), // totalAssignedStaff
                 activeNow.size(),     // currentActiveCount
                 assignedStaff,

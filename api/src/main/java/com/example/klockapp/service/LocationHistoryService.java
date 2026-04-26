@@ -5,9 +5,10 @@ import com.example.klockapp.dto.request.LocationRequest;
 import com.example.klockapp.dto.response.LocationResponse;
 import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.filter.LocationHistoryFilter;
-import com.example.klockapp.mapper.LocationMapper;
+import com.example.klockapp.mapper.LocationHistoryMapper;
 import com.example.klockapp.model.ClockEvent;
 import com.example.klockapp.model.LocationHistory;
+import com.example.klockapp.model.User;
 import com.example.klockapp.model.WorkSession;
 import com.example.klockapp.repo.ClockEventRepo;
 import com.example.klockapp.repo.LocationHistoryRepo;
@@ -31,15 +32,15 @@ public class LocationHistoryService {
     private final LocationHistoryRepo locationHistoryRepo;
     private final WorkSessionRepo workSessionRepo;
     private final ClockEventRepo clockEventRepo;
-    private final LocationMapper locationMapper;
+    private final LocationHistoryMapper locationMapper;
 
-    public void createLocationHistory(LocationRequest request, CustomUserPrincipal principal){
+    public void createLocationHistory(LocationRequest request, User user){
         WorkSession session = workSessionRepo
-                .findByWorkDateAndUser(LocalDate.now(), principal.user())
+                .findByWorkDateAndUser(LocalDate.now(), user)
                 .orElseThrow(() -> new NotFoundException("Work session not found"));
 
         ClockEvent clockEvent = clockEventRepo
-                .findByWorkSessionUserAndClockOutTimeIsNull(principal.user())
+                .findByWorkSessionUserAndClockOutTimeIsNull(user)
                 .orElseThrow(() -> new NotFoundException("No clock-in record was found across all branches."));
 
         // Calculate the distance based on the available prev location points
@@ -77,19 +78,5 @@ public class LocationHistoryService {
                 .findAll((Sort) LocationHistorySpecification.withFilter(filter));
 
         return locationMapper.toListDto(locationHistories);
-    }
-
-    public double getLatLng(ClockEvent clockEvent, LocationHistory locationHistory,LocationRequest request ){
-        if (locationHistory == null){
-            return LocationUtility.calculateDistance(
-                    clockEvent.getLatitudeIn(), clockEvent.getLongitudeIn(),
-                    request.latitude(), request.longitude());
-        } else {
-            locationHistory.setUsed(true);
-            return LocationUtility.calculateDistance(
-                    locationHistory.getLatitude(), locationHistory.getLongitude(),
-                    request.latitude(), request.longitude());
-
-        }
     }
 }

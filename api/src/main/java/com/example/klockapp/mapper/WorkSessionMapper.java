@@ -9,7 +9,7 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(componentModel = "spring",
         uses = { ClockEventMapper.class },
         unmappedTargetPolicy = ReportingPolicy.IGNORE)
-public interface SessionMapper {
+public interface WorkSessionMapper {
 
     @Mapping(target = "movements", source = "clockEvents")
     // Ensure the status field is mapped directly if the types are the same

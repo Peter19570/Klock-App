@@ -5,6 +5,8 @@ import com.example.klockapp.model.User;
 import com.example.klockapp.model.WorkSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,4 +28,9 @@ public interface ClockEventRepo extends JpaRepository<ClockEvent, Long>, JpaSpec
 
     // History: Finds all movements within a single workday container [cite: 9, 49]
     List<ClockEvent> findAllByWorkSessionIdOrderByClockInTimeAsc(Long workSessionId);
+
+    @Query("SELECT AVG(ce.entryProximityDistance) FROM ClockEvent ce " +
+            "WHERE ce.branch.id = :branchId " +
+            "AND ce.entryProximityDistance IS NOT NULL")
+    Double getAverageClockInDistanceForBranch(@Param("branchId") Long branchId);
 }

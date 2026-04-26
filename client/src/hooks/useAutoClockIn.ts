@@ -136,8 +136,13 @@ export function useAutoClockIn({
     return () => window.removeEventListener('online', handleOnline);
   }, [onNotify]);
 
+  // How many seconds of delay before we consider a clock-in "delayed"
+  const DELAY_THRESHOLD_SECONDS = 30;
+
+  const zoneEnteredAtRef = useRef<Date | null>(null);
+
   const attempt = useCallback(
-    async (pos: GeoPosition) => {
+    async (pos: GeoPosition, zoneEnteredAt: Date) => {
       if (attemptingRef.current) return;
       attemptingRef.current = true;
       retriesRef.current    = 0;
@@ -162,8 +167,15 @@ export function useAutoClockIn({
         getBatteryLevel(),
       ]);
       const signalStrength = getSignalStrength();
-      // Java LocalTime expects "HH:mm:ss" — send only the time portion
-      const clientTimeStamp = new Date().toTimeString().slice(0, 8);
+
+      // clientTimeStamp = when the user actually entered the zone (not now).
+      // This is what the backend compares against shift times for audit.
+      const clientTimeStamp = zoneEnteredAt.toTimeString().slice(0, 8);
+
+      // isDelaySync = true if meaningful time passed between zone entry and
+      // the moment we're actually able to submit (offline delay, network lag, etc.)
+      const delaySecs = (Date.now() - zoneEnteredAt.getTime()) / 1000;
+      const isDelaySync = delaySecs > DELAY_THRESHOLD_SECONDS;
 
       const payload: ClockInRequest = {
         latitude:       pos.latitude,
@@ -173,6 +185,7 @@ export function useAutoClockIn({
         batteryLevel,
         signalStrength,
         clientTimeStamp,
+        isDelaySync,
       };
 
       // ── Offline mode: queue and bail ───────────────────────────────────────
@@ -191,7 +204,6 @@ export function useAutoClockIn({
         await flushQueue((count) => {
           onNotify('success', `Synced ${count} delayed clock-in${count !== 1 ? 's' : ''} from queue.`);
         });
-        // If the flush succeeded the session now exists — resolve via onSuccess
         try {
           const { getTodaySession } = await import('../services/sessionService');
           const session = await getTodaySession();
@@ -245,10 +257,12 @@ export function useAutoClockIn({
     );
 
     if (isInside && !wasInsideRef.current) {
-      wasInsideRef.current = true;
-      attempt(position);
+      wasInsideRef.current   = true;
+      zoneEnteredAtRef.current = new Date();   // ← stamp the moment we detect entry
+      attempt(position, zoneEnteredAtRef.current);
     } else if (!isInside) {
-      wasInsideRef.current = false;
+      wasInsideRef.current     = false;
+      zoneEnteredAtRef.current = null;
     }
   }, [position, branches, isClockedIn, attempt]);
 }

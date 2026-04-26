@@ -49,7 +49,7 @@ public class AuthController {
     public ResponseEntity<Void> changePassword(
             @RequestBody @Valid PasswordRequest request,
             @AuthenticationPrincipal CustomUserPrincipal principal){
-        authService.changePassword(request, principal);
+        authService.changePassword(request, principal.user());
         return ResponseEntity.noContent().build();
     }
 
@@ -61,7 +61,7 @@ public class AuthController {
     public ResponseEntity<Void> getDeviceId(
             @RequestBody DeviceIdRequest request,
             @AuthenticationPrincipal CustomUserPrincipal principal){
-        authService.getDeviceId(request, principal);
+        authService.getDeviceId(request, principal.user());
         return ResponseEntity.noContent().build();
     }
 

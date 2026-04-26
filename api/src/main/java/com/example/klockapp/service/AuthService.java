@@ -92,16 +92,14 @@ public class AuthService {
     }
 
     // Method to reset password on first log in
-    public void changePassword(PasswordRequest request, CustomUserPrincipal principal){
-        User user = principal.user();
+    public void changePassword(PasswordRequest request, User user){
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setMustChangePassword(false);
         userRepo.save(user);
     }
 
     // Method to take device id on first log in
-    public void getDeviceId(DeviceIdRequest request, CustomUserPrincipal principal){
-        User user = principal.user();
+    public void getDeviceId(DeviceIdRequest request, User user){
         user.setDeviceId(request.deviceId());
         userRepo.save(user);
     }

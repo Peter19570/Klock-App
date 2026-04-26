@@ -61,7 +61,9 @@ isLocked===true
 |   ├── attendanceService.ts
 hasManuallyClockedOutToday via movements[]
 │   ├── userService.ts              ← me / all (+ homeBranchId filter) / detail / delete / transferUser
-│   ├── branchService.ts            ← ✅ NEW: getAllBranches / getBranchDetails / createBranch / updateBranch / updateBranchRadius / deleteBranch
+│   ├── branchService.ts            ← ✅ NEW: getAllBranches / getBranchDetails / createBranch / updateBranch / 
+updateBranchRadius / deleteBranch
+|   ├── offlineQueueService.ts      ← ✅ NEW
 │   └── locationService.ts          ← ⛔ DEPRECATED: replaced by branchService.ts
 │
 ├── types/

@@ -21,14 +21,14 @@ public class AuditLogController {
     private final AuditLogService auditLogService;
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> allLogs(){
         List<AuditLogResponse> response = auditLogService.showAllLogs();
         return ResponseEntity.ok(new ApiResponse<>("All Logs", response));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> allUserLogs(
             @PathVariable Long id){
         List<AuditLogResponse> response = auditLogService.showAllUserLogs(id);

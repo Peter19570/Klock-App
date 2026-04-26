@@ -19,14 +19,26 @@ public class ClockEvent extends BaseEntity {
     @Column(nullable = false)
     private Instant clockInTime;
 
+    @Column
     private Instant clockOutTime;
 
     @Enumerated(EnumType.STRING)
-    private ClockOutType clockOutType; // MANUAL or AUTOMATIC
+    private ClockOutType clockOutType;
 
+    @Column
     private Double latitudeIn;
+
+    @Column
     private Double longitudeIn;
+
+    @Column
     private Boolean isDelaySync = false;
+
+    @Column
+    private Double siteDepartureDistance; // difference (in meters) btw clock out and clock in distance
+
+    @Column
+    private Double entryProximityDistance; // distance (in meters) user is close to the branch location
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")

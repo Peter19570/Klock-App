@@ -43,7 +43,7 @@ public class SessionController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestBody @Valid ClockInRequest request) throws BadRequestException {
 
-        ClockEventResponse response = attendanceService.clockIn(principal, request);
+        ClockEventResponse response = attendanceService.clockIn(principal.user(), request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(new ApiResponse<>("Clock-in success", response));
@@ -57,7 +57,7 @@ public class SessionController {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestBody @Valid  ClockOutRequest request) {
 
-        ClockEventResponse response = attendanceService.clockOut(principal, request);
+        ClockEventResponse response = attendanceService.clockOut(principal.user(), request);
         return ResponseEntity.ok(new ApiResponse<>("Clock-out success", response));
     }
 

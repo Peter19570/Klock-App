@@ -11,5 +11,7 @@ public record ClockEventResponse(
         Instant clockOutTime,
         ClockOutType clockOutType,
         Double latitudeIn,
-        Double longitudeIn
+        Double longitudeIn,
+        Double siteDepartureDistance,
+        Double entryProximityDistance
 ) {}

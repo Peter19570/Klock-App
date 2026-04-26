@@ -28,7 +28,7 @@ public class Branch extends BaseEntity {
     private Double longitude;
 
     @Column(nullable = false)
-    private Double radius; // Geofence in meters
+    private Double radius;
 
     @Column(nullable = false)
     private LocalTime shiftStart;

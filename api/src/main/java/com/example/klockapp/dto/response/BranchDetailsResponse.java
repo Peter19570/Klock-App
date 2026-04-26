@@ -16,6 +16,9 @@ public record BranchDetailsResponse(
         Double longitude,
         LocalTime shiftStart,
         LocalTime shiftEnd,
+        Double avgDistance,
+        double displayAvg,
+        String status,
 
         // Summary Stats
         long totalAssignedStaff,

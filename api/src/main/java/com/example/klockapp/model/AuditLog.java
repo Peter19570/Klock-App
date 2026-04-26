@@ -1,28 +1,35 @@
 package com.example.klockapp.model;
 
 import com.example.klockapp.common.BaseEntity;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.example.klockapp.enums.AuditOption;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
+@Builder
+@AllArgsConstructor
 @Table(name = "audit_logs")
 public class AuditLog extends BaseEntity {
 
-    private String deviceId;
-    private Integer batteryLevel;
-    private Integer signalStrength;
-    private Double gpsAccuracy;
-    private LocalTime clientTimeStamp;
-    private Boolean verified;
+    @Column
+    private String fullName;
+
+    @Column
     private Long userId;
-    private String name;
-    private Boolean isDelaySync;
+
+    @Enumerated(EnumType.STRING)
+    private AuditOption type;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> auditInfo = new HashMap<>();
 }
