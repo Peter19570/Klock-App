@@ -93,6 +93,12 @@ export interface BranchDetailsResponse {
   autoClockOutDuration?: number;
   shiftStart?: string;
   shiftEnd?: string;
+  /** Average clock-in distance across all users (metres) */
+  avgDistance?: number | null;
+  /** Display-friendly rounded average distance */
+  displayAvg?: number | null;
+  /** Backend-computed status string (e.g. "OPEN", "CLOSED") */
+  status?: string | null;
   totalAssignedStaff: number;
   currentActiveCount: number;
   assignedStaff: UserResponse[];
@@ -114,6 +120,10 @@ export interface ClockEventResponse {
   longitudeOut?: number | null;
   /** Server-computed straight-line distance between clock-in and clock-out (metres) */
   distanceMeters?: number | null;
+  /** How close (metres) the user was to the branch at the time of the clock event */
+  entryProximityDistance?: number | null;
+  /** Distance (metres) between the user's clock-in and clock-out locations */
+  siteDepartureDistance?: number | null;
 }
 
 export interface SessionResponse {
@@ -173,15 +183,21 @@ export interface LocationResponse {
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
+export type AuditLogType =
+  | 'CLOCK_IN_SUCCESS'
+  | 'CLOCK_OUT_SUCCESS'
+  | 'SUSPICIOUS_CLOCK_OUT'
+  | 'DIFFERENT_DEVICE_DETECT'
+  | 'AMBIGUOUS_CLOCK_EVENT';
+
 export interface AuditLogResponse {
-  deviceId: string;
-  batteryLevel: number;
-  signalStrength: number;
-  gpsAccuracy: number;
-  clientTimeStamp: string;
-  verified: boolean;
+  id: number;
+  fullName: string;
+  userId: string;
+  type: AuditLogType;
   createdAt: string;
-  name: string;
+  /** Dynamic key-value store — contents vary by event type */
+  auditInfo: Record<string, unknown>;
 }
 
 // ─── Geolocation ──────────────────────────────────────────────────────────────

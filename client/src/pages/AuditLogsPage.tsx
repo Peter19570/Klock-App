@@ -1,12 +1,13 @@
 import * as React from 'react';
 import {
-  Loader2, RefreshCw, ShieldCheck, ShieldX,
-  Battery, Signal, MapPin, Smartphone, User, Clock,
+  Loader2, RefreshCw,
+  LogIn, LogOut, AlertTriangle, Smartphone, ShieldAlert, HelpCircle,
+  User, Clock, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllAuditLogs } from '@/services/sessionService';
-import type { AuditLogResponse } from '@/types';
+import type { AuditLogResponse, AuditLogType } from '@/types';
 
 function formatDate(iso: string) {
   try {
@@ -17,22 +18,73 @@ function formatDate(iso: string) {
   } catch { return iso; }
 }
 
-function formatTime(iso: string) {
-  // clientTimeStamp is HH:mm:ss (Java LocalTime) — just show HH:mm
-  return iso ? iso.slice(0, 5) : '—';
-}
+const TYPE_CONFIG: Record<AuditLogType, {
+  label: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  badge: string;
+}> = {
+  CLOCK_IN_SUCCESS: {
+    label: 'Clock In',
+    icon: <LogIn className="h-4 w-4" />,
+    iconBg: 'bg-emerald-500/15 text-emerald-500',
+    badge: 'bg-emerald-500/15 border-emerald-400/30 text-emerald-500',
+  },
+  CLOCK_OUT_SUCCESS: {
+    label: 'Clock Out',
+    icon: <LogOut className="h-4 w-4" />,
+    iconBg: 'bg-sky-500/15 text-sky-500',
+    badge: 'bg-sky-500/15 border-sky-400/30 text-sky-500',
+  },
+  SUSPICIOUS_CLOCK_OUT: {
+    label: 'Suspicious',
+    icon: <AlertTriangle className="h-4 w-4" />,
+    iconBg: 'bg-rose-500/15 text-rose-500',
+    badge: 'bg-rose-500/15 border-rose-400/30 text-rose-500',
+  },
+  DIFFERENT_DEVICE_DETECT: {
+    label: 'New Device',
+    icon: <Smartphone className="h-4 w-4" />,
+    iconBg: 'bg-amber-500/15 text-amber-500',
+    badge: 'bg-amber-500/15 border-amber-400/30 text-amber-500',
+  },
+  AMBIGUOUS_CLOCK_EVENT: {
+    label: 'Ambiguous',
+    icon: <HelpCircle className="h-4 w-4" />,
+    iconBg: 'bg-purple-500/15 text-purple-500',
+    badge: 'bg-purple-500/15 border-purple-400/30 text-purple-500',
+  },
+};
 
-function BatteryIndicator({ level }: { level: number }) {
-  const color = level > 50 ? 'text-emerald-500' : level > 20 ? 'text-amber-500' : 'text-rose-500';
+function AuditInfoGrid({ auditInfo }: { auditInfo: Record<string, unknown> }) {
+  const entries = Object.entries(auditInfo);
+  if (entries.length === 0) return null;
   return (
-    <span className={`flex items-center gap-1 font-medium ${color}`}>
-      <Battery className="h-3 w-3" />{level}%
-    </span>
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 px-2 pb-3">
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded-lg bg-muted/40 px-2.5 py-2">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
+            {key.replace(/([A-Z])/g, ' $1').trim()}
+          </p>
+          <p className="text-xs text-foreground font-medium truncate" title={String(value ?? '—')}>
+            {value != null && value !== '' ? String(value) : '—'}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
 function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
   const [expanded, setExpanded] = React.useState(false);
+  const cfg = TYPE_CONFIG[log.type] ?? {
+    label: log.type,
+    icon: <ShieldAlert className="h-4 w-4" />,
+    iconBg: 'bg-muted text-muted-foreground',
+    badge: 'bg-muted border-border text-muted-foreground',
+  };
+
+  const hasInfo = Object.keys(log.auditInfo ?? {}).length > 0;
 
   return (
     <motion.div
@@ -47,70 +99,47 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
       <button
         type="button"
         className="flex items-center gap-4 p-2 w-full text-left"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => hasInfo && setExpanded((v) => !v)}
       >
-        {/* Icon */}
-        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
-          log.verified ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'
-        }`}>
-          {log.verified ? <ShieldCheck className="h-4 w-4" /> : <ShieldX className="h-4 w-4" />}
+        {/* Type icon */}
+        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${cfg.iconBg}`}>
+          {cfg.icon}
         </div>
 
         {/* Text block */}
         <div className="flex-grow min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <p className="text-sm font-medium text-card-foreground leading-tight">
-              {log.name || '—'}
+              {log.fullName || '—'}
             </p>
-            {/* Desktop: date inline on first row */}
             <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3 shrink-0" />
               {formatDate(log.createdAt)}
             </span>
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {/* Mobile: date on second row */}
             <p className="text-sm text-muted-foreground sm:hidden">{formatDate(log.createdAt)}</p>
-            {/* Desktop: device + gps + battery inline */}
             <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-              <Smartphone className="h-3 w-3 shrink-0" />
-              {log.deviceId ? `${log.deviceId.slice(0, 10)}…` : '—'}
+              <User className="h-3 w-3 shrink-0" />
+              ID: {log.userId}
             </span>
-            {log.gpsAccuracy != null && (
-              <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3 shrink-0" />±{log.gpsAccuracy.toFixed(1)}m
-              </span>
-            )}
-            {log.batteryLevel != null && (
-              <span className="hidden sm:inline-flex">
-                <BatteryIndicator level={log.batteryLevel} />
-              </span>
-            )}
-            {/* Mobile condensed second line */}
-            <p className="text-xs text-muted-foreground sm:hidden line-clamp-1">
-              {log.deviceId ? `${log.deviceId.slice(0, 12)}…` : 'No device'}
-              {log.gpsAccuracy != null && ` · ±${log.gpsAccuracy.toFixed(1)}m`}
-            </p>
           </div>
         </div>
 
-        {/* Verified badge */}
-        <div className="shrink-0">
-          {log.verified ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">
-              <ShieldCheck className="h-2.5 w-2.5" /> Verified
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 border border-rose-400/30 px-2 py-0.5 text-[10px] font-semibold text-rose-500 uppercase tracking-wide">
-              <ShieldX className="h-2.5 w-2.5" /> Unverified
-            </span>
+        {/* Type badge + expand chevron */}
+        <div className="shrink-0 flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cfg.badge}`}>
+            {cfg.label}
+          </span>
+          {hasInfo && (
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
           )}
         </div>
       </button>
 
-      {/* Expanded detail grid */}
+      {/* Expanded auditInfo */}
       <AnimatePresence initial={false}>
-        {expanded && (
+        {expanded && hasInfo && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -118,36 +147,7 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-2 pb-3">
-              <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                  <User className="h-3 w-3" /> User
-                </p>
-                <p className="text-xs text-foreground font-medium truncate">{log.name || '—'}</p>
-              </div>
-              <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Client Time
-                </p>
-                <p className="text-xs text-foreground font-medium">{formatTime(log.clientTimeStamp)}</p>
-              </div>
-              <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                  <Signal className="h-3 w-3" /> Signal
-                </p>
-                <p className="text-xs text-foreground font-medium">
-                  {log.signalStrength != null ? `${log.signalStrength} bars` : '—'}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/40 px-2.5 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                  <Smartphone className="h-3 w-3" /> Device ID
-                </p>
-                <p className="text-xs text-foreground font-medium truncate" title={log.deviceId}>
-                  {log.deviceId || '—'}
-                </p>
-              </div>
-            </div>
+            <AuditInfoGrid auditInfo={log.auditInfo} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -183,7 +183,7 @@ export default function AuditLogsPage() {
         <div>
           <h2 className="text-base font-bold text-foreground">Audit Logs</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            System-wide clock-in records with device and GPS metadata.
+            System-wide clock events with contextual metadata.
           </p>
         </div>
         <Button variant="outline" size="icon" className="h-9 w-9 shrink-0"
@@ -211,7 +211,7 @@ export default function AuditLogsPage() {
           <div className="flex flex-col">
             <AnimatePresence>
               {logs.map((log, idx) => (
-                <LogRow key={`${log.createdAt}-${idx}`} log={log} index={idx} />
+                <LogRow key={log.id} log={log} index={idx} />
               ))}
             </AnimatePresence>
           </div>

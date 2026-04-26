@@ -99,7 +99,7 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
       </div>
 
       {/* Distance + clock-in coords sub-row */}
-      {(distLabel || movement.latitudeIn) && (
+      {(distLabel || movement.latitudeIn || movement.entryProximityDistance != null || movement.siteDepartureDistance != null) && (
         <div className="flex items-center gap-3 px-3 pb-2 flex-wrap">
           {movement.latitudeIn != null && (
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -116,6 +116,23 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
               <Ruler className="w-2.5 h-2.5 shrink-0" />
               {distLabel} moved
               {isFarAway && ' ⚠'}
+            </span>
+          )}
+          {movement.entryProximityDistance != null && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+              <MapPin className="w-2.5 h-2.5 shrink-0 text-primary/60" />
+              {formatDistance(movement.entryProximityDistance)} from branch
+            </span>
+          )}
+          {movement.siteDepartureDistance != null && !isActive && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
+              (movement.siteDepartureDistance ?? 0) > 200
+                ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                : 'bg-muted text-muted-foreground'
+            }`}>
+              <Ruler className="w-2.5 h-2.5 shrink-0" />
+              {formatDistance(movement.siteDepartureDistance)} departure
+              {(movement.siteDepartureDistance ?? 0) > 200 && ' ⚠'}
             </span>
           )}
         </div>

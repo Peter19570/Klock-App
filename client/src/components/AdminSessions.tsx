@@ -363,38 +363,72 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
   const isActive = !movement.clockOutTime;
   const isManual = movement.clockOutType === "MANUAL";
 
+  function fmtDist(m: number | null | undefined): string | null {
+    if (m == null) return null;
+    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+    return `${Math.round(m)} m`;
+  }
+
+  const departureLabel = fmtDist(movement.siteDepartureDistance);
+  const proximityLabel = fmtDist(movement.entryProximityDistance);
+  const isDepartureFar = (movement.siteDepartureDistance ?? 0) > 200;
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs">
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 min-w-0">
-        <span className="flex items-center gap-1 text-muted-foreground">
-          <Clock className="h-3 w-3 shrink-0 text-emerald-500" />
-          <span className="text-foreground font-medium">{formatTime(movement.clockInTime)}</span>
-        </span>
-        <span className="text-muted-foreground">→</span>
-        <span className={`font-medium ${isActive ? "text-emerald-500" : "text-foreground"}`}>
-          {isActive ? "now" : formatTime(movement.clockOutTime)}
-        </span>
-        {!isActive && movement.clockOutTime && (
-          <span className="text-muted-foreground">({formatDuration(movement.clockInTime, movement.clockOutTime)})</span>
-        )}
-        {movement.branchName && (
-          <span className="text-primary/60 truncate">@ {movement.branchName}</span>
-        )}
+    <div className="rounded-lg bg-muted/40 text-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 min-w-0">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-3 w-3 shrink-0 text-emerald-500" />
+            <span className="text-foreground font-medium">{formatTime(movement.clockInTime)}</span>
+          </span>
+          <span className="text-muted-foreground">→</span>
+          <span className={`font-medium ${isActive ? "text-emerald-500" : "text-foreground"}`}>
+            {isActive ? "now" : formatTime(movement.clockOutTime)}
+          </span>
+          {!isActive && movement.clockOutTime && (
+            <span className="text-muted-foreground">({formatDuration(movement.clockInTime, movement.clockOutTime)})</span>
+          )}
+          {movement.branchName && (
+            <span className="text-primary/60 truncate">@ {movement.branchName}</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isActive ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Active</span>
+          ) : isManual ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
+              <Hand className="h-2.5 w-2.5" /> Manual
+            </span>
+          ) : movement.clockOutType === "AUTOMATIC" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-400 uppercase tracking-wide">
+              <Zap className="h-2.5 w-2.5" /> Auto
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        {isActive ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Active</span>
-        ) : isManual ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
-            <Hand className="h-2.5 w-2.5" /> Manual
-          </span>
-        ) : movement.clockOutType === "AUTOMATIC" ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-400 uppercase tracking-wide">
-            <Zap className="h-2.5 w-2.5" /> Auto
-          </span>
-        ) : null}
-      </div>
+      {/* Distance sub-row */}
+      {(proximityLabel || departureLabel) && (
+        <div className="flex items-center gap-2 px-3 pb-2 flex-wrap">
+          {proximityLabel && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+              <MapPin className="h-2.5 w-2.5 shrink-0 text-primary/60" />
+              {proximityLabel} from branch
+            </span>
+          )}
+          {departureLabel && !isActive && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
+              isDepartureFar
+                ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                : "bg-muted text-muted-foreground"
+            }`}>
+              <Ruler className="h-2.5 w-2.5 shrink-0" />
+              {departureLabel} departure{isDepartureFar && " ⚠"}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

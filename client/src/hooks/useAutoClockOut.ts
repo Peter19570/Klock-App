@@ -120,11 +120,10 @@ export function useAutoClockOut({
         });
         onSuccessRef.current();
 
-        // ── Distance alert: warn if clock-out is far from clock-in ────────────
+        // ── Distance alert: use server-provided siteDepartureDistance ──────────
         const movement = res.data?.data;
-        if (movement && pos && movement.latitudeIn != null && movement.longitudeIn != null) {
-          const { haversineDistance: hd } = await import('../lib/utils');
-          const distM = hd(movement.latitudeIn, movement.longitudeIn, pos.latitude, pos.longitude);
+        if (movement?.siteDepartureDistance != null) {
+          const distM = movement.siteDepartureDistance;
           if (distM > 200) {
             const distLabel = distM >= 1000
               ? `${(distM / 1000).toFixed(1)} km`
