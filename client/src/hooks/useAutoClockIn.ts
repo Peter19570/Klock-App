@@ -73,6 +73,9 @@ function enqueue(payload: ClockInRequest & { isDelaySync: true }) {
     queuedAt: new Date().toISOString(),
   };
   writeQueue([...readQueue(), entry]);
+  // localStorage 'storage' events don't fire in the same tab — dispatch a
+  // custom event so UserDashboard can update its pendingCount immediately.
+  window.dispatchEvent(new Event('klock:queue-updated'));
 }
 
 async function flushQueue(
@@ -91,6 +94,7 @@ async function flushQueue(
   writeQueue(remaining);
   const flushed = queue.length - remaining.length;
   if (flushed > 0) onFlushed?.(flushed);
+  window.dispatchEvent(new Event('klock:queue-updated'));
 }
 
 export function useAutoClockIn({
@@ -126,8 +130,9 @@ export function useAutoClockIn({
       });
     };
     window.addEventListener('online', handleOnline);
-    // Also try on mount (might have just come back online)
-    if (navigator.onLine) handleOnline();
+    // On mount, only flush if there's actually something queued — don't
+    // trigger a flush that would race with the first attempt() call.
+    if (navigator.onLine && readQueue().length > 0) handleOnline();
     return () => window.removeEventListener('online', handleOnline);
   }, [onNotify]);
 
@@ -177,6 +182,26 @@ export function useAutoClockIn({
         retriesRef.current    = 0;
         attemptingRef.current = false;
         return;
+      }
+
+      // ── If there are queued entries from a previous offline attempt, flush
+      //    those first (they carry isDelaySync: true + the original clientTimeStamp)
+      //    rather than submitting a new fresh clock-in without the flag. ─────────
+      if (readQueue().length > 0) {
+        await flushQueue((count) => {
+          onNotify('success', `Synced ${count} delayed clock-in${count !== 1 ? 's' : ''} from queue.`);
+        });
+        // If the flush succeeded the session now exists — resolve via onSuccess
+        try {
+          const { getTodaySession } = await import('../services/sessionService');
+          const session = await getTodaySession();
+          if (session) {
+            onSuccess(session.id);
+            retriesRef.current    = 0;
+            attemptingRef.current = false;
+            return;
+          }
+        } catch { /* fall through to fresh attempt below */ }
       }
 
       while (retriesRef.current < MAX_RETRIES) {

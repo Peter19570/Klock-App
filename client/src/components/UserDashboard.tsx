@@ -76,12 +76,14 @@ export function UserDashboard() {
   // ─── Keep pending-queue count in sync with localStorage ───────────────────
   useEffect(() => {
     const refresh = () => setPendingCount(getPendingCount());
-    // Storage events fire when another tab writes; also poll on online/offline
+    // 'storage' fires from other tabs; 'klock:queue-updated' fires from this tab
     window.addEventListener('storage', refresh);
+    window.addEventListener('klock:queue-updated', refresh);
     window.addEventListener('online', refresh);
     window.addEventListener('offline', refresh);
     return () => {
       window.removeEventListener('storage', refresh);
+      window.removeEventListener('klock:queue-updated', refresh);
       window.removeEventListener('online', refresh);
       window.removeEventListener('offline', refresh);
     };
@@ -169,6 +171,7 @@ export function UserDashboard() {
   // ─── Poll branches so radius changes propagate ─────────────────────────────
   useEffect(() => {
     const id = setInterval(async () => {
+      if (!navigator.onLine) return;           // ← skip silently when offline
       try {
         const res = await getAllBranches({ page: 0, size: 100 });
         setBranches(res.data.data.content ?? []);
@@ -188,7 +191,7 @@ export function UserDashboard() {
   const roundedLat = position ? Math.round(position.latitude  * 10_000) : null;
   const roundedLng = position ? Math.round(position.longitude * 10_000) : null;
   useEffect(() => {
-    if (!position) return;
+    if (!position || !navigator.onLine) return;   // ← skip when offline
     reverseGeocode(position.latitude, position.longitude).then(setLocationName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedLat, roundedLng]);
