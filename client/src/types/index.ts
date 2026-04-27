@@ -67,11 +67,11 @@ export interface BranchStatusRequest {
 }
 
 /**
- * Compact branch reference — returned by GET /api/v1/branches (paginated list).
- * NOTE: latitude/longitude are NOT in the API response for this type.
- * They are kept optional here so AdminMap / useAutoClockOut still compile
- * when the caller manually enriches the object (e.g. from BranchDetailsResponse).
- * Use branchStatus === 'LOCKED' to check lock state; isLocked is not sent by the API.
+ * Compact branch reference — returned by GET /api/v1/branches (paginated list)
+ * AND embedded inside DashboardResponse.branchSummaries.
+ * NOTE: latitude/longitude are present in the dashboard payload but were
+ * previously optional here. They remain optional for backward compat with
+ * callers that build BranchResponse manually from paginated list results.
  */
 export interface BranchResponse {
   id: number;
@@ -84,6 +84,10 @@ export interface BranchResponse {
   longitude?: number;
   /** Enriched client-side from BranchDetailsResponse — used by useAutoClockOut */
   autoClockOutDuration?: number;
+  /** Present in dashboard payload and GET /api/v1/branches list */
+  totalAssignedStaff?: number;
+  /** Present in dashboard payload and GET /api/v1/branches list */
+  currentActiveCount?: number;
 }
 
 export interface BranchDetailsResponse {
@@ -240,4 +244,46 @@ export interface AdminMapPayload {
   branchId?: number;
   branchName?: string;
   timeStamp: string;
+}
+
+// ─── Dashboard (unified overview payload) ────────────────────────────────────
+
+/**
+ * One data point in the 7-day session trend array.
+ * The backend guarantees all 7 days are present — days with no sessions have count: 0.
+ * dayLabel is a pre-formatted short weekday name (e.g. "Mon", "Tue").
+ */
+export interface SessionTrend {
+  date: string;      // yyyy-MM-dd
+  dayLabel: string;  // e.g. "Mon"
+  count: number;
+}
+
+/** Clock-out method breakdown from the dashboard payload */
+export interface ClockOutStats {
+  manual: number;
+  automatic: number;
+}
+
+/**
+ * Returned by GET /api/v1/admin/dashboard.
+ * Replaces the old multi-call pattern in AdminOverview:
+ *   - totalUsers      ← was: GET /api/v1/users?size=1
+ *   - todaySessionCount ← was: derived from sessions list
+ *   - clockOutStats   ← was: derived by iterating movements[]
+ *   - sessionTrend    ← was: derived from GET /api/v1/sessions?size=200
+ *   - branchSummaries ← was: N × getBranchDetails(id) calls
+ *   - totalAssignedStaff / totalActiveStaff / lockedBranchCount ← were: derived client-side
+ */
+export interface DashboardResponse {
+  totalUsers: number;
+  todaySessionCount: number;
+  totalAssignedStaff: number;
+  totalActiveStaff: number;
+  lockedBranchCount: number;
+  clockOutStats: ClockOutStats;
+  /** Pre-filled for exactly 7 days — zero-count days are included by the backend */
+  sessionTrend: SessionTrend[];
+  /** Branch-level summary with staff counts embedded — no extra detail calls needed */
+  branchSummaries: BranchResponse[];
 }

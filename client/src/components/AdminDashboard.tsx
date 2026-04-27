@@ -676,10 +676,8 @@ export function AdminDashboard() {
             {/* ── OVERVIEW */}
             {activeTab === 'overview' && (
               <AdminOverview
-                branches={branches}
                 liveUsers={liveUsers}
                 isSuperAdmin={isSuperAdmin}
-                adminBranch={adminBranch}
                 onNavigateToTab={(tab) => handleTabChange(tab as TabId)}
               />
             )}

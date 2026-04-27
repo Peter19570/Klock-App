@@ -6,6 +6,7 @@ import type {
   BranchDetailsResponse,
   BranchRequest,
   BranchStatusRequest,
+  DashboardResponse,
 } from '../types';
 
 export interface GetBranchesParams {
@@ -26,6 +27,19 @@ export const getBranchDetails = (id: number) =>
 // admin's own branch from the JWT and ignores the id value.
 export const getManagedBranch = (id: number) =>
   api.get<ApiResponse<BranchDetailsResponse>>(`/api/v1/branches/managed/${id}`);
+
+// ─── Dashboard (unified overview) ────────────────────────────────────────────
+
+/**
+ * GET /api/v1/dashboard/overview
+ * Single call that replaces:
+ *   - GET /api/v1/users?size=1           (totalUsers)
+ *   - GET /api/v1/sessions?size=200      (chart data, clock-out stats, today count)
+ *   - GET /api/v1/branches/{id} × N      (per-branch staff counts)
+ * Role-scoped on the backend: SUPER_ADMIN sees all branches, ADMIN sees own branch only.
+ */
+export const getDashboard = () =>
+  api.get<ApiResponse<DashboardResponse>>('/api/v1/dashboard/overview');
 
 // ─── Create / Update ──────────────────────────────────────────────────────────
 

@@ -1,16 +1,12 @@
 import * as React from 'react';
 import {
   Users, GitBranch, Activity, Lock, TrendingUp,
-  CheckCircle2, Clock, Loader2, RefreshCw,
+  CheckCircle2, Clock, Loader2, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import api from '@/services/api';
-import { getAllBranches, getBranchDetails } from '@/services/branchService';
-import type {
-  ApiResponse, PageResponse, BranchResponse, BranchDetailsResponse,
-  SessionResponse,
-} from '@/types';
+import { getDashboard } from '@/services/branchService';
+import type { BranchResponse, DashboardResponse } from '@/types';
 
 // ── Animated number counter ───────────────────────────────────────────────────
 function AnimatedNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
@@ -31,7 +27,7 @@ interface StatCardProps {
   label: string;
   value: number | null;
   suffix?: string;
-  accent?: boolean; // amber tint
+  accent?: boolean;
   loading?: boolean;
 }
 
@@ -69,16 +65,10 @@ function StatCard({ icon, label, value, suffix, accent, loading }: StatCardProps
   );
 }
 
-// ── Branch row in the breakdown list ─────────────────────────────────────────
-interface BranchRowProps {
-  branch: BranchResponse;
-  details: BranchDetailsResponse | null;
-  index: number;
-}
-
-function BranchRow({ branch, details, index }: BranchRowProps) {
-  const total = details?.totalAssignedStaff ?? 0;
-  const active = details?.currentActiveCount ?? 0;
+// ── Branch row ────────────────────────────────────────────────────────────────
+function BranchRow({ branch, index }: { branch: BranchResponse; index: number }) {
+  const total = branch.totalAssignedStaff ?? 0;
+  const active = branch.currentActiveCount ?? 0;
   const pct = total > 0 ? Math.round((active / total) * 100) : 0;
 
   return (
@@ -88,7 +78,6 @@ function BranchRow({ branch, details, index }: BranchRowProps) {
       transition={{ duration: 0.25, delay: Math.min(index * 0.05, 0.3) }}
       className="flex items-center gap-3 py-2.5 border-b border-border last:border-0"
     >
-      {/* Branch name + lock badge */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{branch.displayName}</p>
@@ -98,46 +87,45 @@ function BranchRow({ branch, details, index }: BranchRowProps) {
             </span>
           )}
         </div>
-        {details && (
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {active} active · {total} assigned
-          </p>
-        )}
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          {active} active · {total} assigned
+        </p>
       </div>
-
-      {/* Progress bar */}
-      {details ? (
-        <div className="w-24 sm:w-32 shrink-0">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-muted-foreground">{pct}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-            <motion.div
-              className="h-full rounded-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.8, delay: 0.2 + index * 0.05, ease: 'easeOut' }}
-            />
-          </div>
+      <div className="w-24 sm:w-32 shrink-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] text-muted-foreground">{pct}%</span>
         </div>
-      ) : (
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
-      )}
+        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+          <motion.div
+            className="h-full rounded-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.8, delay: 0.2 + index * 0.05, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
     </motion.div>
   );
 }
 
-// ── Sessions-per-day bar chart (last 7 days) ──────────────────────────────────
-interface DayBar {
-  label: string;    // e.g. "Mon"
-  date: string;     // yyyy-mm-dd
-  count: number;
-}
+// ── Sessions bar chart ────────────────────────────────────────────────────────
+interface DayBar { label: string; date: string; count: number; }
 
 function SessionsChart({ bars, loading }: { bars: DayBar[]; loading: boolean }) {
   const max = Math.max(...bars.map((b) => b.count), 1);
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+
+  // Bars start at height 0. After one animation frame they flip to their real
+  // height so the CSS transition has a "from" state to animate from.
+  const [grown, setGrown] = React.useState(false);
+  React.useEffect(() => {
+    if (loading || bars.length === 0) { setGrown(false); return; }
+    const raf = requestAnimationFrame(() => setGrown(true));
+    return () => cancelAnimationFrame(raf);
+  }, [loading, bars]);
+
+  const CHART_H = 80;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
@@ -154,39 +142,48 @@ function SessionsChart({ bars, loading }: { bars: DayBar[]; loading: boolean }) 
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {/* Bar area — fixed height */}
-          <div className="flex items-end gap-1.5" style={{ height: '80px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: `${CHART_H}px` }}>
             {bars.map((bar, i) => {
               const isToday = bar.date === today;
-              const heightPx = bar.count > 0 ? Math.max((bar.count / max) * 76, 6) : 3;
+              const targetH = bar.count === 0
+                ? 3
+                : Math.max(Math.round((bar.count / max) * CHART_H), 8);
+              const currentH = grown ? targetH : 0;
+
+              const bg = bar.count === 0
+                ? 'var(--border, #e2e8f0)'
+                : isToday
+                  ? 'var(--primary)'
+                  : 'color-mix(in srgb, var(--primary) 50%, transparent)';
+
               return (
-                <div key={bar.date} className="flex-1 flex items-end h-full group relative">
-                  {/* hover count */}
-                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                    {bar.count}
-                  </span>
-                  <div
-                    className={`w-full rounded-t-md transition-all duration-500 ${
-                      isToday ? 'bg-primary' : 'bg-primary/35 dark:bg-primary/30'
-                    }`}
-                    style={{
-                      height: `${heightPx}px`,
-                      transitionDelay: `${i * 60}ms`,
-                      opacity: bar.count === 0 ? 0.25 : 1,
-                    }}
-                  />
-                </div>
+                <div
+                  key={bar.date}
+                  title={`${bar.label}: ${bar.count} session${bar.count !== 1 ? 's' : ''}`}
+                  style={{
+                    flex: 1,
+                    height: `${currentH}px`,
+                    backgroundColor: bg,
+                    borderRadius: '4px 4px 0 0',
+                    transition: `height 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) ${i * 60}ms`,
+                    cursor: 'default',
+                  }}
+                />
               );
             })}
           </div>
-          {/* Labels row — separate from bar area */}
-          <div className="flex gap-1.5">
+
+          <div style={{ display: 'flex', gap: '4px' }}>
             {bars.map((bar) => {
               const isToday = bar.date === today;
               return (
-                <div key={bar.date} className="flex-1 flex justify-center">
-                  <span className={`text-[10px] font-medium ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                <div key={bar.date} style={{ flex: 1, textAlign: 'center' }}>
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    color: isToday ? 'var(--primary)' : 'var(--muted-foreground)',
+                  }}>
                     {bar.label}
                   </span>
                 </div>
@@ -199,15 +196,11 @@ function SessionsChart({ bars, loading }: { bars: DayBar[]; loading: boolean }) 
   );
 }
 
-// ── Clock-out type breakdown donut ────────────────────────────────────────────
-function ClockOutBreakdown({
-  manual, automatic, loading,
-}: { manual: number; automatic: number; loading: boolean }) {
+// ── Clock-out donut ───────────────────────────────────────────────────────────
+function ClockOutBreakdown({ manual, automatic, loading }: { manual: number; automatic: number; loading: boolean }) {
   const total = manual + automatic;
   const autoPct = total > 0 ? Math.round((automatic / total) * 100) : 0;
   const manualPct = total > 0 ? 100 - autoPct : 0;
-
-  // SVG donut params
   const r = 36;
   const circ = 2 * Math.PI * r;
   const autoDash = (autoPct / 100) * circ;
@@ -233,36 +226,24 @@ function ClockOutBreakdown({
         </div>
       ) : (
         <div className="flex items-center gap-6">
-          {/* Donut */}
           <div className="relative shrink-0">
             <svg width="88" height="88" viewBox="0 0 88 88">
-              {/* track */}
               <circle cx="44" cy="44" r={r} fill="none" strokeWidth="10" className="stroke-muted" />
-              {/* auto slice */}
               {autoPct > 0 && (
-                <motion.circle
-                  cx="44" cy="44" r={r}
-                  fill="none"
-                  strokeWidth="10"
+                <motion.circle cx="44" cy="44" r={r} fill="none" strokeWidth="10"
                   className="stroke-primary"
                   strokeDasharray={`${autoDash} ${circ - autoDash}`}
-                  strokeDashoffset={circ / 4}
-                  strokeLinecap="round"
+                  strokeDashoffset={circ / 4} strokeLinecap="round"
                   initial={{ strokeDasharray: `0 ${circ}` }}
                   animate={{ strokeDasharray: `${autoDash} ${circ - autoDash}` }}
                   transition={{ duration: 1, ease: 'easeOut' }}
                 />
               )}
-              {/* manual slice */}
               {manualPct > 0 && (
-                <motion.circle
-                  cx="44" cy="44" r={r}
-                  fill="none"
-                  strokeWidth="10"
+                <motion.circle cx="44" cy="44" r={r} fill="none" strokeWidth="10"
                   className="stroke-muted-foreground/30"
                   strokeDasharray={`${manualDash} ${circ - manualDash}`}
-                  strokeDashoffset={circ / 4 - autoDash}
-                  strokeLinecap="round"
+                  strokeDashoffset={circ / 4 - autoDash} strokeLinecap="round"
                   initial={{ strokeDasharray: `0 ${circ}` }}
                   animate={{ strokeDasharray: `${manualDash} ${circ - manualDash}` }}
                   transition={{ duration: 1, delay: 0.2, ease: 'easeOut' }}
@@ -274,17 +255,13 @@ function ClockOutBreakdown({
               <span className="text-[9px] text-muted-foreground">auto</span>
             </div>
           </div>
-
-          {/* Legend */}
           <div className="flex flex-col gap-3 flex-1">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
                 <span className="text-xs font-medium text-foreground">Automatic</span>
               </div>
-              <p className="text-2xl font-bold text-foreground ml-4.5">
-                <AnimatedNumber value={automatic} />
-              </p>
+              <p className="text-2xl font-bold text-foreground ml-4.5"><AnimatedNumber value={automatic} /></p>
               <p className="text-[11px] text-muted-foreground ml-4.5">geofence triggered</p>
             </div>
             <div>
@@ -292,9 +269,7 @@ function ClockOutBreakdown({
                 <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
                 <span className="text-xs font-medium text-foreground">Manual</span>
               </div>
-              <p className="text-2xl font-bold text-foreground ml-4.5">
-                <AnimatedNumber value={manual} />
-              </p>
+              <p className="text-2xl font-bold text-foreground ml-4.5"><AnimatedNumber value={manual} /></p>
               <p className="text-[11px] text-muted-foreground ml-4.5">user initiated</p>
             </div>
           </div>
@@ -306,31 +281,17 @@ function ClockOutBreakdown({
 
 // ── Main AdminOverview ────────────────────────────────────────────────────────
 interface AdminOverviewProps {
-  branches: BranchResponse[];
   liveUsers: Map<string, { sessionState?: string; branchId?: number }>;
   isSuperAdmin: boolean;
-  adminBranch?: BranchResponse | null;
   onNavigateToTab: (tab: string) => void;
 }
 
-export default function AdminOverview({
-  branches,
-  liveUsers,
-  isSuperAdmin,
-  adminBranch,
-  onNavigateToTab,
-}: AdminOverviewProps) {
-  const [totalUsers, setTotalUsers]     = React.useState<number | null>(null);
-  const [todaySessions, setTodaySessions] = React.useState<number | null>(null);
-  const [branchDetails, setBranchDetails] = React.useState<Map<number, BranchDetailsResponse>>(new Map());
-  const [sessionBars, setSessionBars]   = React.useState<DayBar[]>([]);
-  const [clockOutStats, setClockOutStats] = React.useState({ manual: 0, automatic: 0 });
-  const [loadingUsers, setLoadingUsers] = React.useState(true);
-  const [loadingToday, setLoadingToday] = React.useState(true);
-  const [loadingChart, setLoadingChart] = React.useState(true);
-  const [refreshKey, setRefreshKey]     = React.useState(0);
+export default function AdminOverview({ liveUsers, isSuperAdmin, onNavigateToTab }: AdminOverviewProps) {
+  const [dashboard, setDashboard] = React.useState<DashboardResponse | null>(null);
+  const [loading, setLoading]     = React.useState(true);
+  const [error, setError]         = React.useState(false);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
-  // Live active count from WebSocket
   const liveActiveCount = React.useMemo(() => {
     let count = 0;
     liveUsers.forEach((u) => {
@@ -340,117 +301,27 @@ export default function AdminOverview({
     return count;
   }, [liveUsers]);
 
-  // Stats from branch details
-  const branchStats = React.useMemo(() => {
-    const list = isSuperAdmin ? branches : (adminBranch ? [adminBranch] : []);
-    let totalAssigned = 0;
-    let totalActive = 0;
-    let locked = 0;
-    list.forEach((b) => {
-      const d = branchDetails.get(b.id);
-      if (d) {
-        totalAssigned += d.totalAssignedStaff;
-        totalActive   += d.currentActiveCount;
-      }
-      if (b.branchStatus === 'LOCKED') locked++;
-    });
-    return { totalAssigned, totalActive, locked };
-  }, [branches, adminBranch, branchDetails, isSuperAdmin]);
-
-  // Fetch total users
   React.useEffect(() => {
-    setLoadingUsers(true);
-    api.get<ApiResponse<PageResponse<{ id: number }>>>('/api/v1/users', {
-      params: { page: 0, size: 1 },
-    }).then((res) => {
-      setTotalUsers(res.data.data.totalElements);
-    }).catch(() => setTotalUsers(null))
-      .finally(() => setLoadingUsers(false));
+    setLoading(true);
+    setError(false);
+    getDashboard()
+      .then((res) => setDashboard(res.data.data))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
   }, [refreshKey]);
 
-  // Fetch branch details for breakdown
-  React.useEffect(() => {
-    const list = isSuperAdmin ? branches : (adminBranch ? [adminBranch] : []);
-    if (list.length === 0) return;
-    const map = new Map<number, BranchDetailsResponse>();
-    Promise.all(
-      list.map((b) =>
-        getBranchDetails(b.id)
-          .then((res) => { map.set(b.id, res.data.data); })
-          .catch(() => {}),
-      ),
-    ).then(() => setBranchDetails(new Map(map)));
-  }, [branches, adminBranch, isSuperAdmin, refreshKey]);
+  const sessionBars: DayBar[] = React.useMemo(() =>
+    (dashboard?.sessionTrend ?? []).map((t) => ({
+      label: t.dayLabel,
+      date: t.date,
+      count: t.count,
+    })),
+  [dashboard]);
 
-  // Fetch sessions for last 7 days — build chart by grouping all sessions by workDate
-  React.useEffect(() => {
-    const now = new Date();
-
-    // Build last 7 days as yyyy-MM-dd strings (local date, no UTC shift)
-    const toLocalDateStr = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    const days: DayBar[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      days.push({
-        label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-        date: toLocalDateStr(d),
-        count: 0,
-      });
-    }
-
-    const minDate = days[0].date;
-    const maxDate = days[days.length - 1].date;
-
-    setLoadingChart(true);
-    setLoadingToday(true);
-
-    api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions', {
-      params: { page: 0, size: 200, minWorkDate: minDate, maxWorkDate: maxDate },
-    }).then((res) => {
-      const sessions = res.data.data.content ?? [];
-
-      // Group sessions by workDate — workDate from backend is already yyyy-MM-dd
-      const countByDate = new Map<string, number>();
-      sessions.forEach((s) => {
-        countByDate.set(s.workDate, (countByDate.get(s.workDate) ?? 0) + 1);
-      });
-
-      // Apply counts to the pre-built day slots
-      const filledDays = days.map((d) => ({ ...d, count: countByDate.get(d.date) ?? 0 }));
-      setSessionBars(filledDays);
-
-      // Today count
-      const today = toLocalDateStr(now);
-      setTodaySessions(countByDate.get(today) ?? 0);
-
-      // Clock-out breakdown
-      let manual = 0, automatic = 0;
-      sessions.forEach((s) => {
-        s.movements.forEach((m) => {
-          if (m.clockOutTime) {
-            if (m.clockOutType === 'AUTOMATIC') automatic++;
-            else if (m.clockOutType === 'MANUAL') manual++;
-          }
-        });
-      });
-      setClockOutStats({ manual, automatic });
-    }).catch(() => {
-      setSessionBars(days);
-      setTodaySessions(null);
-    }).finally(() => {
-      setLoadingChart(false);
-      setLoadingToday(false);
-    });
-  }, [refreshKey]);
-
-  const displayBranches = isSuperAdmin ? branches : (adminBranch ? [adminBranch] : []);
+  const branchSummaries = dashboard?.branchSummaries ?? [];
 
   return (
     <div className="space-y-6">
-      {/* Header row */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">Overview</h2>
@@ -459,55 +330,49 @@ export default function AdminOverview({
           </p>
         </div>
         <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
+          variant="outline" size="icon" className="h-8 w-8"
           onClick={() => setRefreshKey((k) => k + 1)}
           title="Refresh overview"
+          disabled={loading}
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
 
-      {/* Stat cards */}
+      {error && !loading && (
+        <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Failed to load dashboard data.</span>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs text-destructive hover:text-destructive"
+            onClick={() => setRefreshKey((k) => k + 1)}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          icon={<Users className="h-4 w-4" />}
-          label="Total Users"
-          value={totalUsers}
-          loading={loadingUsers}
-        />
-        <StatCard
-          icon={<Activity className="h-4 w-4" />}
-          label="Active Now"
-          value={liveActiveCount}
-          accent
-        />
-        <StatCard
-          icon={<Clock className="h-4 w-4" />}
-          label="Sessions Today"
-          value={todaySessions}
-          loading={loadingToday}
-        />
-        <StatCard
-          icon={<GitBranch className="h-4 w-4" />}
+        <StatCard icon={<Users className="h-4 w-4" />} label="Total Users"
+          value={dashboard?.totalUsers ?? null} loading={loading} />
+        <StatCard icon={<Activity className="h-4 w-4" />} label="Active Now"
+          value={liveActiveCount} accent />
+        <StatCard icon={<Clock className="h-4 w-4" />} label="Sessions Today"
+          value={dashboard?.todaySessionCount ?? null} loading={loading} />
+        <StatCard icon={<GitBranch className="h-4 w-4" />}
           label={isSuperAdmin ? 'Total Branches' : 'Your Branch'}
-          value={isSuperAdmin ? branches.length : (adminBranch ? 1 : null)}
-        />
+          value={isSuperAdmin ? (dashboard?.branchSummaries.length ?? null) : (dashboard ? 1 : null)}
+          loading={loading} />
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SessionsChart bars={sessionBars} loading={loadingChart} />
+        <SessionsChart bars={sessionBars} loading={loading} />
         <ClockOutBreakdown
-          manual={clockOutStats.manual}
-          automatic={clockOutStats.automatic}
-          loading={loadingChart}
+          manual={dashboard?.clockOutStats.manual ?? 0}
+          automatic={dashboard?.clockOutStats.automatic ?? 0}
+          loading={loading}
         />
       </div>
 
-      {/* Branch breakdown — Super Admin only shows all, Admin shows their one */}
-      {displayBranches.length > 0 && (
+      {(loading || branchSummaries.length > 0) && (
         <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
           <div className="flex items-center justify-between mb-1">
             <div>
@@ -516,40 +381,35 @@ export default function AdminOverview({
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">Staff assignment & active rate</p>
             </div>
-            {isSuperAdmin && branchStats.locked > 0 && (
+            {isSuperAdmin && (dashboard?.lockedBranchCount ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-500 font-medium border border-amber-400/20">
-                <Lock className="h-3 w-3" />{branchStats.locked} locked
+                <Lock className="h-3 w-3" />{dashboard!.lockedBranchCount} locked
               </span>
             )}
           </div>
 
-          <div className="mt-3">
-            {displayBranches.map((b, i) => (
-              <BranchRow
-                key={b.id}
-                branch={b}
-                details={branchDetails.get(b.id) ?? null}
-                index={i}
-              />
-            ))}
-          </div>
-
-          {/* Summary footer */}
-          {branchDetails.size > 0 && (
-            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{branchStats.totalActive}</span> of{' '}
-                <span className="font-semibold text-foreground">{branchStats.totalAssigned}</span> staff active
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => onNavigateToTab(isSuperAdmin ? 'branches' : 'branch')}
-              >
-                Manage
-              </Button>
+          {loading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : (
+            <>
+              <div className="mt-3">
+                {branchSummaries.map((b, i) => <BranchRow key={b.id} branch={b} index={i} />)}
+              </div>
+              {branchSummaries.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{dashboard?.totalActiveStaff ?? 0}</span> of{' '}
+                    <span className="font-semibold text-foreground">{dashboard?.totalAssignedStaff ?? 0}</span> staff active
+                  </p>
+                  <Button variant="outline" size="sm" className="h-7 text-xs"
+                    onClick={() => onNavigateToTab(isSuperAdmin ? 'branches' : 'branch')}>
+                    Manage
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
