@@ -5,6 +5,13 @@ import type { SessionResponse, ClockEventResponse } from '../types';
 
 interface SessionHistoryProps {
   sessions: SessionResponse[];
+  /**
+   * Pass `true` when the caller has already sorted sessions (e.g. AllSessionsPage
+   * or UserSessionsPage which receive server-ordered results). Skips the internal
+   * descending-date sort so the API order is preserved.
+   * Defaults to `false` — the Dashboard relies on client-side sorting.
+   */
+  presorted?: boolean;
 }
 
 function formatDate(iso: string) {
@@ -56,8 +63,8 @@ function ArrivalBadge({ status }: { status?: 'EARLY' | 'ON_TIME' | 'LATE' | null
 }
 
 function MovementRow({ movement }: { movement: ClockEventResponse }) {
-  const isActive = !movement.clockOutTime;
-  const isManual = movement.clockOutType === 'MANUAL';
+  const isActive  = !movement.clockOutTime;
+  const isManual  = movement.clockOutType === 'MANUAL';
   const distLabel = formatDistance(movement.distanceMeters);
   const isFarAway = (movement.distanceMeters ?? 0) > 200;
 
@@ -98,7 +105,7 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
         </div>
       </div>
 
-      {/* Distance + clock-in coords sub-row */}
+      {/* Distance + coords sub-row */}
       {(distLabel || movement.latitudeIn || movement.entryProximityDistance != null || movement.siteDepartureDistance != null) && (
         <div className="flex items-center gap-3 px-3 pb-2 flex-wrap">
           {movement.latitudeIn != null && (
@@ -144,22 +151,23 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
 function SessionCard({
   session,
   index,
+  defaultOpen = false,
 }: {
   session: SessionResponse;
   index: number;
+  defaultOpen?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref    = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '0px 0px -40px 0px' });
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultOpen);
 
-  const isActive = session.status === 'ACTIVE';
+  const isActive      = session.status === 'ACTIVE';
   const firstMovement = session.movements[0];
-  const lastMovement = session.movements[session.movements.length - 1];
+  const lastMovement  = session.movements[session.movements.length - 1];
 
-  const totalDuration =
-    firstMovement
-      ? formatDuration(firstMovement.clockInTime, lastMovement?.clockOutTime)
-      : '—';
+  const totalDuration = firstMovement
+    ? formatDuration(firstMovement.clockInTime, lastMovement?.clockOutTime)
+    : '—';
 
   const totalDistLabel = formatDistance(session.totalDistanceMeters);
 
@@ -249,7 +257,7 @@ function SessionCard({
   );
 }
 
-export function SessionHistory({ sessions }: SessionHistoryProps) {
+export function SessionHistory({ sessions, presorted = false }: SessionHistoryProps) {
   if (sessions.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-6">
@@ -258,14 +266,24 @@ export function SessionHistory({ sessions }: SessionHistoryProps) {
     );
   }
 
-  const sorted = [...sessions].sort(
-    (a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime(),
-  );
+  const ordered = presorted
+    ? sessions
+    : [...sessions].sort(
+        (a, b) => new Date(b.workDate).getTime() - new Date(a.workDate).getTime(),
+      );
+
+  // Auto-expand the active session when present
+  const activeIdx = ordered.findIndex((s) => s.status === 'ACTIVE');
 
   return (
     <div className="space-y-2">
-      {sorted.map((s, i) => (
-        <SessionCard key={s.id} session={s} index={i} />
+      {ordered.map((s, i) => (
+        <SessionCard
+          key={s.id}
+          session={s}
+          index={i}
+          defaultOpen={i === activeIdx}
+        />
       ))}
     </div>
   );

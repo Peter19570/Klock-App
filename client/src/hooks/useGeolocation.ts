@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { GeoPosition } from '../types';
 import { sendLocationPing } from '../services/sessionService';
 
-const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const PING_INTERVAL_MS = 1 * 60 * 1000; // 1 minute (change back to 10 for production)
 
 export function useGeolocation(isClockedIn = false) {
   const [position, setPosition] = useState<GeoPosition | null>(null);

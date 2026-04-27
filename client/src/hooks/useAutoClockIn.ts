@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { haversineDistance } from '../lib/utils';
 import { clockIn, getActiveMovement } from '../services/sessionService';
+import { getMe } from '../services/userService';
+import api from '../services/api';
 import type { GeoPosition, ClockInRequest, OfflineClockInEntry } from '../types';
 
 interface UseAutoClockInOptions {
@@ -23,9 +25,35 @@ async function getDeviceId(): Promise<string> {
   // Generate a stable pseudo-device-id from browser fingerprint
   const ua = navigator.userAgent + navigator.language + screen.width + screen.height;
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ua));
-  const id = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+  const id = Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
   localStorage.setItem('klock_device_id', id);
   return id;
+}
+
+/**
+ * Checks the /me response for a deviceId.
+ * If null/undefined, POSTs to /device to register the current deviceId.
+ * Returns the deviceId that should be used for the clock-in payload.
+ */
+async function ensureDeviceRegistered(): Promise<string> {
+  const deviceId = await getDeviceId();
+
+  try {
+    const res = await getMe();
+    const registeredDeviceId = res.data.data.deviceId;
+
+    if (!registeredDeviceId) {
+      // Device not registered on the backend — register it now
+      await api.post('/api/v1/users/device', { deviceId });
+    }
+  } catch {
+    // If /me or /device fails (e.g. offline), still proceed with the local deviceId
+  }
+
+  return deviceId;
 }
 
 async function getBatteryLevel(): Promise<number | undefined> {
@@ -161,9 +189,11 @@ export function useAutoClockIn({
         // fall through
       }
 
-      // ── Collect device integrity metadata ──────────────────────────────────
+      // ── Step 1: Check /me and register device if needed ───────────────────
+      // ensureDeviceRegistered() checks the /me response. If deviceId is null,
+      // it POSTs to /device before proceeding with the clock-in flow.
       const [deviceId, batteryLevel] = await Promise.all([
-        getDeviceId(),
+        ensureDeviceRegistered(),
         getBatteryLevel(),
       ]);
       const signalStrength = getSignalStrength();
@@ -257,8 +287,8 @@ export function useAutoClockIn({
     );
 
     if (isInside && !wasInsideRef.current) {
-      wasInsideRef.current   = true;
-      zoneEnteredAtRef.current = new Date();   // ← stamp the moment we detect entry
+      wasInsideRef.current     = true;
+      zoneEnteredAtRef.current = new Date(); // ← stamp the moment we detect entry
       attempt(position, zoneEnteredAtRef.current);
     } else if (!isInside) {
       wasInsideRef.current     = false;

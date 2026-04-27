@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,4 +35,14 @@ public interface ClockEventRepo extends JpaRepository<ClockEvent, Long>, JpaSpec
             "WHERE ce.branch.id = :branchId " +
             "AND ce.entryProximityDistance IS NOT NULL")
     Double getAverageClockInDistanceForBranch(@Param("branchId") Long branchId);
+
+    @Query("SELECT ce.clockOutType, COUNT(ce) FROM ClockEvent ce " +
+            "WHERE ce.clockOutTime IS NOT NULL AND ce.clockInTime >= :startOfDay " +
+            "GROUP BY ce.clockOutType")
+    List<Object[]> getTodayClockOutStats(@Param("startOfDay") Instant startOfDay);
+
+    // Optimized: Gets current active count for ALL branches in one go
+    @Query("SELECT ce.branch.id, COUNT(ce) FROM ClockEvent ce " +
+            "WHERE ce.clockOutTime IS NULL GROUP BY ce.branch.id")
+    List<Object[]> getAllCurrentActiveCounts();
 }

@@ -4,27 +4,29 @@ import type { UserDetailResponse, AuthRequest } from "@/types";
 
 // ── Device registration helpers ───────────────────────────────────────────────
 
-/** Returns a stable device ID stored in localStorage, creating one if absent. */
-function getOrCreateDeviceId(): string {
-  const key = "klock-device-id";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
-  }
+/**
+ * Returns the same stable device ID used by useAutoClockIn (klock_device_id).
+ * Generates a SHA-256 fingerprint from browser info on first call.
+ */
+async function getDeviceId(): Promise<string> {
+  const stored = localStorage.getItem("klock_device_id");
+  if (stored) return stored;
+  const ua = navigator.userAgent + navigator.language + screen.width + screen.height;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ua));
+  const id = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  localStorage.setItem("klock_device_id", id);
   return id;
 }
 
 /**
- * If the user's deviceId is null (first login on this device), register the
- * current device with the backend — mirrors the mustChangePassword redirect pattern.
+ * Only registers the device if the user's deviceId is null in the /me response.
+ * Fires silently in the background — non-fatal if it fails.
  */
-async function ensureDeviceRegistered(userData: UserDetailResponse): Promise<void> {
-  // `deviceId` is optional on the type; null/undefined means not yet registered
-  if ((userData as UserDetailResponse & { deviceId?: string | null }).deviceId != null) return;
+async function registerDeviceIfNeeded(userData: UserDetailResponse): Promise<void> {
+  if (userData.deviceId != null) return;
   try {
-    const deviceId = getOrCreateDeviceId();
-    await api.post("/api/v1/users/device", { deviceId });
+    const deviceId = await getDeviceId();
+    await api.post("/api/v1/auth/device", { deviceId });
   } catch (err) {
     console.warn("Device registration failed (non-fatal):", err);
   }
@@ -95,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenStore.save(accessToken, refreshToken);
     const userData = await fetchUser();
     if (userData) {
-      await ensureDeviceRegistered(userData);
+      registerDeviceIfNeeded(userData); // fire-and-forget
       handleHardRedirect(userData);
     }
   };

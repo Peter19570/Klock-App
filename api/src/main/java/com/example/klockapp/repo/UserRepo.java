@@ -20,4 +20,6 @@ public interface UserRepo extends JpaRepository<User, Long>, JpaSpecificationExe
     List<User> findAllByHomeBranchId(Long branchId);
 
     Boolean existsByRole(UserRole userRole);
+
+    long countByRole(UserRole role);
 }

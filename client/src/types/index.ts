@@ -24,6 +24,7 @@ export interface UserDetailResponse {
   firstName: string;
   lastName: string;
   picture?: string;
+  deviceId?: string | null;
   role: UserRole;
   homeBranchName: string;
   createdAt: string;

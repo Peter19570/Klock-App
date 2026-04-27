@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -26,28 +27,29 @@ public class AutoClockOut {
 
     @Scheduled(fixedRate = 50000)
     public void autoClockOutAfterBranchEndShiftTime() {
-        // 1. Use findByStatus without forcing a throw
-        var sessionOptional = workSessionRepo.findByStatus(SessionStatus.ACTIVE);
+        // 1. Fetch all active sessions as a List
+        List<WorkSession> activeSessions = workSessionRepo.findByStatus(SessionStatus.ACTIVE);
 
-        if (sessionOptional.isEmpty()) {
-//            log.info("No active session found in db");
-            return; // Exit gracefully
+        if (activeSessions.isEmpty()) {
+            return; // Exit gracefully if no sessions are active
         }
 
-        WorkSession session = sessionOptional.get();
+        // 2. Iterate through each session to check for clock-outs
+        for (WorkSession session : activeSessions) {
+            clockEventRepo.findByClockOutTimeIsNullAndWorkSession(session)
+                    .ifPresent(clockEvent -> {
+                        // Check if current time is past the branch shift end
+                        if (LocalTime.now().isAfter(clockEvent.getBranch().getShiftEnd())) {
+                            clockEvent.setClockOutTime(Instant.now());
+                            clockEvent.setClockOutType(ClockOutType.AUTOMATIC);
 
-        // 2. Continue with your logic
-        clockEventRepo.findByClockOutTimeIsNullAndWorkSession(session)
-                .ifPresent(clockEvent -> {
-                    if (LocalTime.now().isAfter(clockEvent.getBranch().getShiftEnd())) {
-                        clockEvent.setClockOutTime(Instant.now());
-                        clockEvent.setClockOutType(ClockOutType.AUTOMATIC);
-                        session.setStatus(SessionStatus.COMPLETED);
+                            session.setStatus(SessionStatus.COMPLETED);
 
-                        // Don't forget to save!
-                        workSessionRepo.save(session);
-                        clockEventRepo.save(clockEvent);
-                    }
-                });
+                            // Save both changes
+                            workSessionRepo.save(session);
+                            clockEventRepo.save(clockEvent);
+                        }
+                    });
+        }
     }
 }

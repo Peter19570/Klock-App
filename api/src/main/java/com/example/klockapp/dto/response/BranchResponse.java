@@ -13,5 +13,7 @@ public record BranchResponse(
         BranchStatus branchStatus,
         Long autoClockOutDuration,
         LocalTime shiftStart,
-        LocalTime shiftEnd
+        LocalTime shiftEnd,
+        int totalAssignedStaff, // Added for summary
+        int currentActiveCount  // Added for summary
 ) {}

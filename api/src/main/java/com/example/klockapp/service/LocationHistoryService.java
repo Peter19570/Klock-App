@@ -62,6 +62,7 @@ public class LocationHistoryService {
 
         LocationHistory newLocationHistory = locationMapper.toEntity(request);
         newLocationHistory.setWorkSession(session);
+        newLocationHistory.setUserId(user.getId());
         locationHistoryRepo.save(newLocationHistory);
     }
 

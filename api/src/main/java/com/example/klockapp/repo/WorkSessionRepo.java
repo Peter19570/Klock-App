@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -26,7 +27,7 @@ public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSp
 
     Page<WorkSession> findAllByUserId(Long userId, Pageable pageable);
 
-    Optional<WorkSession> findByStatus(SessionStatus sessionStatus);
+    List<WorkSession> findByStatus(SessionStatus sessionStatus);
 
     @QueryHints(value = {
             @QueryHint(name = "org.hibernate.fetchSize", value = "100"),
@@ -42,5 +43,14 @@ public interface WorkSessionRepo extends JpaRepository<WorkSession, Long>, JpaSp
             @Param("start") LocalDate start,
             @Param("end") LocalDate end
     );
+
+    long countByWorkDate(LocalDate date);
+
+    @Query("SELECT COUNT(ws) FROM WorkSession ws WHERE ws.workDate = :date AND ws.status = 'ACTIVE'")
+    long countActiveSessions(@Param("date") LocalDate date);
+
+    @Query("SELECT ws.workDate as date, COUNT(ws) as count FROM WorkSession ws " +
+            "WHERE ws.workDate > :since GROUP BY ws.workDate ORDER BY ws.workDate ASC")
+    List<Object[]> getSessionTrendData(@Param("since") LocalDate since);
 
 }

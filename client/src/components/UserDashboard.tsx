@@ -75,6 +75,20 @@ export function UserDashboard() {
   const [pendingCount, setPendingCount]       = useState(() => getPendingCount());
   const [isSyncing, setIsSyncing]             = useState(false);
 
+  // ─── Global offline state ──────────────────────────────────────────────────
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline  = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online',  handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online',  handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // ─── Keep pending-queue count in sync with localStorage ───────────────────
   useEffect(() => {
     const refresh = () => setPendingCount(getPendingCount());
@@ -412,6 +426,32 @@ export function UserDashboard() {
         </h1>
         <p className="text-muted-foreground mt-1">{statusLabel}</p>
       </div>
+
+      {/* ── Global offline banner ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div
+            key="connectivity-banner"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center gap-3 p-4 rounded-xl border border-red-400/40 bg-red-400/10 text-sm"
+            role="status"
+            aria-live="polite"
+          >
+            <WifiOff className="w-4 h-4 shrink-0 text-red-500" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-red-600 dark:text-red-400">
+                You are currently offline
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Clock-ins will be queued and synced automatically when your connection is restored.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Geo error banner */}
       <AnimatePresence>

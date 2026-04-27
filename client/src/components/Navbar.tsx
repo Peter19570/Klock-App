@@ -1,12 +1,32 @@
-import { LogOut, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { LogOut, Zap, User } from 'lucide-react';
 import { AnimatedThemeToggle } from './ui/animated-theme-toggle';
 import { Button } from './ui/button';
 import { useAuth } from '../context/AuthContext';
+import { getMe } from '../services/userService';
+import type { UserDetailResponse } from '../types';
 
 export function Navbar() {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin      = user?.role === 'ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  const [meData, setMeData] = useState<UserDetailResponse | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getMe()
+      .then((res) => setMeData(res.data.data))
+      .catch(() => { /* silently fall back to initials */ });
+  }, [user]);
+
+  const displayName = meData
+    ? `${meData.firstName} ${meData.lastName}`
+    : user
+    ? `${user.firstName} ${user.lastName}`
+    : '';
+
+  const avatarUrl = meData?.picture ?? null;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md">
@@ -33,9 +53,29 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           {user && (
             <span className="hidden sm:block text-sm text-muted-foreground">
-              {user.firstName} {user.lastName}
+              {displayName}
             </span>
           )}
+
+          {/* Avatar */}
+          {user && (
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // If the image fails to load, hide it so the fallback icon shows
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <User className="w-4 h-4 text-muted-foreground" />
+              )}
+            </div>
+          )}
+
           <AnimatedThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout} title="Logout">
             <LogOut className="w-4 h-4" />

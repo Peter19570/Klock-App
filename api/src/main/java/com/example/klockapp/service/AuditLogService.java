@@ -1,9 +1,11 @@
 package com.example.klockapp.service;
 
 import com.example.klockapp.dto.response.AuditLogResponse;
+import com.example.klockapp.filter.AuditLogFilter;
 import com.example.klockapp.mapper.AuditLogMapper;
 import com.example.klockapp.model.AuditLog;
 import com.example.klockapp.repo.AuditLogRepo;
+import com.example.klockapp.specification.AuditLogSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,16 +23,16 @@ public class AuditLogService {
     /**
      * Get all logs in the database
      * */
-    public List<AuditLogResponse> showAllLogs(){
-        List<AuditLog> auditLogs = auditLogRepo.findAll();
+    public List<AuditLogResponse> showAllLogs(AuditLogFilter filter){
+        List<AuditLog> auditLogs = auditLogRepo.findAll(AuditLogSpecification.withFilter(filter));
         return auditLogMapper.toListDto(auditLogs);
     }
 
     /**
      * Get all logs in the database that belong to a user
      * */
-    public List<AuditLogResponse> showAllUserLogs(Long userId){
-        List<AuditLog> auditLogs = auditLogRepo.findAllByUserId(userId);
+    public List<AuditLogResponse> showAllUserLogs(AuditLogFilter filter){
+        List<AuditLog> auditLogs = auditLogRepo.findAll(AuditLogSpecification.withFilter(filter));
         return auditLogMapper.toListDto(auditLogs);
     }
 }
