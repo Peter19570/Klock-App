@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { Lock, Unlock, Loader2, AlertTriangle } from "lucide-react";
+import { Lock, Unlock, Loader2, AlertTriangle, ChevronDown, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,7 @@ export default function LocationSettings({
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(true);
 
   const [radiusRaw, setRadiusRaw]     = React.useState("0");
   const [durationRaw, setDurationRaw] = React.useState("0");
@@ -183,17 +184,57 @@ export default function LocationSettings({
     <div className="w-full">
       <SplashedPushNotifications ref={toastRef} />
 
-      <div className="mb-4 sm:mb-6">
-        <h2 className="text-base sm:text-lg font-semibold text-foreground">
-          Branch Settings{original ? ` — ${original.displayName}` : ""}
-        </h2>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-          {allReadOnly
-            ? "This branch is locked by Super Admin. Settings are read-only."
-            : "Manage this branch's perimeter and auto clock-out rules."}
-        </p>
-      </div>
+      {/* ── Section header with collapse toggle ── */}
+      <button
+        type="button"
+        onClick={() => setSettingsOpen((v) => !v)}
+        className="w-full flex items-center justify-between mb-3 group"
+      >
+        <div className="text-left">
+          <h2 className="text-base sm:text-lg font-semibold text-foreground">
+            Branch Settings{original ? ` — ${original.displayName}` : ""}
+          </h2>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            {allReadOnly
+              ? "This branch is locked by Super Admin. Settings are read-only."
+              : "Manage this branch's perimeter and auto clock-out rules."}
+          </p>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0 ml-3 ${settingsOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
 
+      {/* ── Extra info strip (always visible) ── */}
+      {original && (original.avgDistance != null || original.status) && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {original.status && (
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              original.status === 'OPEN'
+                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-400/30'
+                : 'bg-muted text-muted-foreground border-border'
+            }`}>
+              {original.status}
+            </span>
+          )}
+          {(original.avgDistance != null || original.displayAvg != null) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+              <BarChart2 className="h-3 w-3 shrink-0" />
+              Avg entry dist: {Math.round(original.displayAvg ?? original.avgDistance ?? 0)}m
+            </span>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence initial={false}>
+        {settingsOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4 sm:space-y-5">
 
         {/* ── LOCKED SECTION (Super Admin only — name + lat/lng) ──────────── */}
@@ -363,6 +404,9 @@ export default function LocationSettings({
           </Button>
         )}
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Confirmation dialog portal */}
       <AnimatePresence>

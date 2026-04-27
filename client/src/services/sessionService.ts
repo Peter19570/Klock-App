@@ -132,9 +132,9 @@ export { flushOfflineClockInQueue } from '../hooks/useAutoClockIn';
 
 // ─── Audit Log (NEW — SUPER_ADMIN only) ──────────────────────────────────────
 
-/** GET /api/v1/audit — all audit logs */
-export const getAllAuditLogs = () =>
-  api.get<ApiResponse<AuditLogResponse[]>>('/api/v1/audit');
+/** GET /api/v1/audit — all audit logs (filterable by date, actionType, search) */
+export const getAllAuditLogs = (params?: Record<string, string>) =>
+  api.get<ApiResponse<AuditLogResponse[]>>('/api/v1/audit', { params });
 
 /** GET /api/v1/audit/{id} — audit logs for a specific user */
 export const getUserAuditLogs = (userId: number) =>

@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
-import { Clock, LogOut, Zap, Hand, CalendarDays, ChevronDown, MapPin, Ruler, AlarmClock } from 'lucide-react';
+import { Clock, LogOut, Zap, Hand, CalendarDays, ChevronDown, MapPin, Ruler, AlarmClock, Route } from 'lucide-react';
 import type { SessionResponse, ClockEventResponse } from '../types';
 
 interface SessionHistoryProps {
@@ -62,11 +62,92 @@ function ArrivalBadge({ status }: { status?: 'EARLY' | 'ON_TIME' | 'LATE' | null
   );
 }
 
+/** Renders a Leaflet mini-map showing clock-in (green) and clock-out (red) pins
+ *  connected by a polyline. Only mounts when the movement has both coordinates. */
+function MovementMap({ movement }: { movement: ClockEventResponse }) {
+  const mapRef    = useRef<HTMLDivElement>(null);
+  const leafletRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    let cancelled = false;
+
+    import('leaflet').then((L) => {
+      if (cancelled || leafletRef.current) return;
+
+      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+
+      const inLat  = movement.latitudeIn;
+      const inLng  = movement.longitudeIn;
+      const outLat = movement.latitudeOut ?? null;
+      const outLng = movement.longitudeOut ?? null;
+
+      const center: [number, number] = outLat != null
+        ? [(inLat + outLat) / 2, (inLng + (outLng ?? inLng)) / 2]
+        : [inLat, inLng];
+
+      const map = L.map(mapRef.current!, {
+        scrollWheelZoom: false,
+        zoomControl: false,
+        dragging: false,
+        doubleClickZoom: false,
+        attributionControl: false,
+      }).setView(center, 16);
+
+      leafletRef.current = map;
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+      // Clock-in marker (green)
+      const inIcon = L.divIcon({
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+        className: '', iconSize: [10, 10], iconAnchor: [5, 5],
+      });
+      L.marker([inLat, inLng], { icon: inIcon }).addTo(map)
+        .bindTooltip('Clock In', { permanent: false, direction: 'top' });
+
+      if (outLat != null && outLng != null) {
+        // Clock-out marker (red)
+        const outIcon = L.divIcon({
+          html: `<div style="width:10px;height:10px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+          className: '', iconSize: [10, 10], iconAnchor: [5, 5],
+        });
+        L.marker([outLat, outLng], { icon: outIcon }).addTo(map)
+          .bindTooltip('Clock Out', { permanent: false, direction: 'top' });
+
+        // Polyline connecting the two points
+        const polyline = L.polyline([[inLat, inLng], [outLat, outLng]], {
+          color: '#6366f1', weight: 2.5, opacity: 0.85, dashArray: '6 4',
+        }).addTo(map);
+
+        map.fitBounds(polyline.getBounds(), { padding: [24, 24] });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      leafletRef.current?.remove();
+      leafletRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={mapRef}
+      className="w-full rounded-lg overflow-hidden border border-border"
+      style={{ height: 160 }}
+    />
+  );
+}
+
 function MovementRow({ movement }: { movement: ClockEventResponse }) {
   const isActive  = !movement.clockOutTime;
   const isManual  = movement.clockOutType === 'MANUAL';
   const distLabel = formatDistance(movement.distanceMeters);
   const isFarAway = (movement.distanceMeters ?? 0) > 200;
+  const [mapOpen, setMapOpen] = useState(false);
+  const hasCoords = movement.latitudeIn != null;
 
   return (
     <div className="rounded-lg bg-muted/40 text-sm overflow-hidden">
@@ -142,8 +223,37 @@ function MovementRow({ movement }: { movement: ClockEventResponse }) {
               {(movement.siteDepartureDistance ?? 0) > 200 && ' ⚠'}
             </span>
           )}
+          {hasCoords && (
+            <button
+              type="button"
+              onClick={() => setMapOpen((v) => !v)}
+              className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-1.5 py-0.5 border transition-colors ${
+                mapOpen
+                  ? 'bg-indigo-500/15 text-indigo-500 border-indigo-400/30'
+                  : 'bg-muted text-muted-foreground border-border hover:text-foreground'
+              }`}
+            >
+              <Route className="w-2.5 h-2.5 shrink-0" />
+              {mapOpen ? 'Hide map' : 'View path'}
+            </button>
+          )}
         </div>
       )}
+
+      {/* Path map */}
+      <AnimatePresence initial={false}>
+        {mapOpen && hasCoords && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden px-3 pb-2"
+          >
+            <MovementMap movement={movement} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

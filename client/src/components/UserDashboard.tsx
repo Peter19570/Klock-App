@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { LogIn, LogOut, MapPin, AlertCircle, ChevronRight, Radio, Timer, Building2, WifiOff, RefreshCw } from 'lucide-react';
+import { LogIn, LogOut, MapPin, AlertCircle, ChevronRight, Radio, Building2, WifiOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,7 +25,7 @@ import {
   isActive,
   getActiveMovement,
 } from '../services/sessionService';
-import { getAllBranches } from '../services/branchService';
+import { getAllBranches, getBranchDetails } from '../services/branchService';
 import { getPendingCount } from '../services/offlineQueueService';
 import { flushOfflineClockInQueue } from '../hooks/useAutoClockIn';
 import type { SessionResponse, BranchResponse } from '../types';
@@ -162,7 +162,18 @@ export function UserDashboard() {
           isActive(),
         ]);
         const fetched = branchRes.data.data.content ?? [];
-        setBranches(fetched);
+        // Enrich with autoClockOutDuration from branch details (needed by useAutoClockOut)
+        const enriched = await Promise.all(
+          fetched.map(async (b) => {
+            try {
+              const det = await getBranchDetails(b.id);
+              return { ...b, autoClockOutDuration: det.data.data.autoClockOutDuration };
+            } catch {
+              return b;
+            }
+          }),
+        );
+        setBranches(enriched);
         setIsClockedIn(activeStatus);
         await fetchSessions();
         if (activeStatus) {
@@ -190,7 +201,18 @@ export function UserDashboard() {
       if (!navigator.onLine) return;           // ← skip silently when offline
       try {
         const res = await getAllBranches({ page: 0, size: 100 });
-        setBranches(res.data.data.content ?? []);
+        const fetched = res.data.data.content ?? [];
+        const enriched = await Promise.all(
+          fetched.map(async (b) => {
+            try {
+              const det = await getBranchDetails(b.id);
+              return { ...b, autoClockOutDuration: det.data.data.autoClockOutDuration };
+            } catch {
+              return b;
+            }
+          }),
+        );
+        setBranches(enriched);
       } catch { /* silent */ }
     }, BRANCH_POLL_MS);
     return () => clearInterval(id);
@@ -245,7 +267,7 @@ export function UserDashboard() {
   );
   const stableSetManualClockIn  = useCallback(() => setManualClockInEnabled(true), []);
   const stableSetManualClockOut = useCallback(() => setManualClockOutEnabled(true), []);
-  const stableOnCountdownChange = useCallback((s: number | null) => setCountdownSeconds(s), []);
+  const stableOnCountdownChange = useCallback((s: number | null) => setCountdownSeconds(s === null ? null : s), []);
 
   // ─── Auto hooks ───────────────────────────────────────────────────────────
   const branchPerimeters = branches.map((b) => ({
@@ -264,7 +286,7 @@ export function UserDashboard() {
     onNotify:         stableNotify,
   });
 
-  const { delaySeconds: autoClockOutDelaySeconds } = useAutoClockOut({
+  useAutoClockOut({
     position: hooksReady ? position : null,
     branches,
     isClockedIn,
@@ -553,37 +575,6 @@ export function UserDashboard() {
           </div>
 
           <AnimatePresence mode="wait">
-            {countdownSeconds !== null && isClockedIn && (
-              <motion.div
-                key="countdown"
-                initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                transition={{ duration: 0.25 }}
-                className="flex items-center gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3"
-              >
-                <Timer className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber-400">You left the office zone</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Auto clocking out in{' '}
-                    <span className="font-mono font-bold text-amber-400 tabular-nums">
-                      {Math.floor(countdownSeconds / 60)}:
-                      {String(countdownSeconds % 60).padStart(2, '0')}
-                    </span>
-                    {' '}— return to cancel
-                  </p>
-                </div>
-                <div className="w-16 h-1.5 rounded-full bg-amber-400/20 overflow-hidden shrink-0">
-                  <motion.div
-                    className="h-full bg-amber-400 rounded-full origin-left"
-                    animate={{ scaleX: countdownSeconds / autoClockOutDelaySeconds }}
-                    transition={{ duration: 0.9, ease: 'linear' }}
-                  />
-                </div>
-              </motion.div>
-            )}
-
             {sessionDoneForToday && !cooldownActive && countdownSeconds === null && (
               <motion.p
                 key="done"

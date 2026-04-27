@@ -1,10 +1,14 @@
 import * as React from 'react';
+import * as ReactDOM from 'react-dom';
 import {
   ArrowLeft, Loader2,
   LogIn, LogOut, AlertTriangle, Smartphone, ShieldAlert, HelpCircle,
-  User, Clock, ChevronDown,
+  Clock, ChevronDown, SlidersHorizontal, X, Search, CalendarDays,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { getUserAuditLogs } from '@/services/sessionService';
 import type { AuditLogResponse, AuditLogType, UserDetailResponse } from '@/types';
 
@@ -61,30 +65,27 @@ const TYPE_CONFIG: Record<AuditLogType, {
   },
 };
 
-/**
- * Java LocalTime comes over the wire in two shapes depending on Jackson config:
- *   array  → [9, 30, 0]  (hour, minute, second)
- *   object → { hour: 9, minute: 30, second: 0, nano: 0 }
- * We detect both and format to HH:mm.
- */
+const ALL_TYPES: AuditLogType[] = [
+  'CLOCK_IN_SUCCESS',
+  'CLOCK_OUT_SUCCESS',
+  'SUSPICIOUS_CLOCK_OUT',
+  'DIFFERENT_DEVICE_DETECT',
+  'AMBIGUOUS_CLOCK_EVENT',
+];
+
 function formatAuditValue(value: unknown): string {
   if (value == null || value === '') return '—';
-
-  // Array shape: [H, M] or [H, M, S] — all numbers, H 0-23, M 0-59
   if (Array.isArray(value)) {
     const [h, m] = value as number[];
     if (
       value.length >= 2 &&
       value.every((v) => typeof v === 'number') &&
-      h >= 0 && h <= 23 &&
-      m >= 0 && m <= 59
+      h >= 0 && h <= 23 && m >= 0 && m <= 59
     ) {
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     }
     return value.join(', ');
   }
-
-  // Object shape: { hour, minute, second?, nano? }
   if (typeof value === 'object') {
     const t = value as Record<string, unknown>;
     if (
@@ -97,7 +98,6 @@ function formatAuditValue(value: unknown): string {
     }
     return JSON.stringify(value);
   }
-
   return String(value);
 }
 
@@ -149,33 +149,20 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
         className="flex items-center gap-4 p-2 w-full text-left"
         onClick={() => hasInfo && setExpanded((v) => !v)}
       >
-        {/* Type icon */}
         <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${cfg.iconBg}`}>
           {cfg.icon}
         </div>
 
-        {/* Text block */}
         <div className="flex-grow min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-sm font-medium text-card-foreground leading-tight">
-              {formatDate(log.createdAt)}
-            </p>
-            <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-              <User className="h-3 w-3 shrink-0" />
-              ID: {log.userId}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3 shrink-0" />{formatDate(log.createdAt)}
-            </span>
-            <p className="text-xs text-muted-foreground sm:hidden">
-              ID: {log.userId}
-            </p>
-          </div>
+          <p className="text-sm font-medium text-card-foreground leading-tight">
+            {formatDate(log.createdAt)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+            <Clock className="h-3 w-3 shrink-0 inline mr-1" />
+            {formatDate(log.createdAt)}
+          </p>
         </div>
 
-        {/* Type badge + expand chevron */}
         <div className="shrink-0 flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cfg.badge}`}>
             {cfg.label}
@@ -186,7 +173,6 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
         </div>
       </button>
 
-      {/* Expanded auditInfo */}
       <AnimatePresence initial={false}>
         {expanded && hasInfo && (
           <motion.div
@@ -204,22 +190,174 @@ function LogRow({ log, index }: { log: AuditLogResponse; index: number }) {
   );
 }
 
+// ─── Filter state ─────────────────────────────────────────────────────────────
+
+interface LogFilters {
+  date: string;
+  actionType: AuditLogType | '';
+}
+
+const EMPTY_FILTERS: LogFilters = { date: '', actionType: '' };
+
+interface LogFilterModalProps {
+  open: boolean;
+  onClose: () => void;
+  filters: LogFilters;
+  onApply: (f: LogFilters) => void;
+  onClear: () => void;
+}
+
+function LogFilterModal({ open, onClose, filters, onApply, onClear }: LogFilterModalProps) {
+  const [local, setLocal] = React.useState<LogFilters>(filters);
+
+  React.useEffect(() => {
+    if (open) setLocal(filters);
+  }, [open, filters]);
+
+  const set = <K extends keyof LogFilters>(key: K, value: LogFilters[K]) =>
+    setLocal((prev) => ({ ...prev, [key]: value }));
+
+  const handleApply = () => { onApply(local); onClose(); };
+  const handleClear = () => { setLocal(EMPTY_FILTERS); onClear(); onClose(); };
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Filter Logs</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Date */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5" /> Date
+                </Label>
+                <Input
+                  type="date"
+                  value={local.date}
+                  onChange={(e) => set('date', e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              {/* Event type */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Event Type</Label>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => set('actionType', '')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      local.actionType === ''
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {ALL_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => set('actionType', t)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        local.actionType === t
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
+                      }`}
+                    >
+                      {TYPE_CONFIG[t].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <Button variant="outline" className="flex-1" onClick={handleClear}>Clear</Button>
+              <Button className="flex-1" onClick={handleApply}>Apply</Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps) {
-  const [logs, setLogs]       = React.useState<AuditLogResponse[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError]     = React.useState('');
+  const [allLogs, setAllLogs]     = React.useState<AuditLogResponse[]>([]);
+  const [loading, setLoading]     = React.useState(true);
+  const [error, setError]         = React.useState('');
+  const [filters, setFilters]     = React.useState<LogFilters>(EMPTY_FILTERS);
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [search, setSearch]       = React.useState('');
 
   React.useEffect(() => {
     setLoading(true);
     setError('');
     getUserAuditLogs(userId)
-      .then((res) => setLogs(res.data.data ?? []))
+      .then((res) => setAllLogs(res.data.data ?? []))
       .catch(() => setError('Failed to load audit logs.'))
       .finally(() => setLoading(false));
   }, [userId]);
 
+  const logs = React.useMemo(() => {
+    let result = allLogs;
+    if (filters.date) {
+      result = result.filter((l) => l.createdAt.startsWith(filters.date));
+    }
+    if (filters.actionType) {
+      result = result.filter((l) => l.type === filters.actionType);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((l) => formatDate(l.createdAt).toLowerCase().includes(q));
+    }
+    return result;
+  }, [allLogs, filters, search]);
+
+  const activeFilterCount = [
+    filters.date !== '',
+    filters.actionType !== '',
+  ].filter(Boolean).length;
+
+  const removeChip = (key: keyof LogFilters) =>
+    setFilters((prev) => ({ ...prev, [key]: '' }));
+
+  const TYPE_LABEL: Record<string, string> = Object.fromEntries(
+    ALL_TYPES.map((t) => [t, TYPE_CONFIG[t].label]),
+  );
+
+  // User initials for avatar
+  const initials = [user.firstName?.[0], user.lastName?.[0]].filter(Boolean).join('').toUpperCase();
+
   return (
     <div className="space-y-5">
+      {/* Back */}
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -228,11 +366,78 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
         Back to {user.firstName} {user.lastName}
       </button>
 
-      <div>
-        <h2 className="text-lg font-bold text-foreground">
-          Audit Logs — {user.firstName} {user.lastName}
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
+      {/* User header with avatar */}
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+          {user.profilePictureUrl ? (
+            <img
+              src={user.profilePictureUrl}
+              alt={`${user.firstName} ${user.lastName}`}
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            <span className="text-sm font-bold text-primary">{initials || '?'}</span>
+          )}
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-foreground leading-tight">
+            Audit Logs — {user.firstName} {user.lastName}
+          </h2>
+          <p className="text-xs text-muted-foreground">{user.email}</p>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {/* Search input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2 h-9 shrink-0"
+            onClick={() => setFilterOpen(true)}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        {/* Active chips */}
+        {activeFilterCount > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {filters.date && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                <Clock className="h-3 w-3" /> {filters.date}
+                <button onClick={() => removeChip('date')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {filters.actionType && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+                {TYPE_LABEL[filters.actionType] ?? filters.actionType}
+                <button onClick={() => removeChip('actionType')} className="text-muted-foreground hover:text-foreground ml-0.5">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -245,12 +450,12 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
         </div>
       ) : logs.length === 0 ? (
         <div className="text-center py-16 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-          No audit logs found for this user.
+          {allLogs.length === 0 ? 'No audit logs found for this user.' : 'No logs match your filters.'}
         </div>
       ) : (
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground px-2">
-            {logs.length} log{logs.length !== 1 ? 's' : ''} — tap any row to expand details
+            {logs.length} log{logs.length !== 1 ? 's' : ''}{allLogs.length !== logs.length ? ` of ${allLogs.length}` : ''} — tap any row to expand details
           </p>
           <div className="flex flex-col">
             <AnimatePresence>
@@ -261,6 +466,14 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
           </div>
         </div>
       )}
+
+      <LogFilterModal
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filters={filters}
+        onApply={setFilters}
+        onClear={() => setFilters(EMPTY_FILTERS)}
+      />
     </div>
   );
 }

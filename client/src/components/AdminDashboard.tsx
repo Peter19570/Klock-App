@@ -189,14 +189,15 @@ interface BranchDetailPageProps {
 type StaffTab = 'assigned' | 'active';
 
 function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageProps) {
-  const [details, setDetails]         = useState<BranchDetailsResponse | null>(null);
-  const [loadingDetails, setLoadingDetails] = useState(true);
-  const [liveRadius, setLiveRadius]   = useState<number | null>(null);
-  const [togglingLock, setTogglingLock] = useState(false);
-  const [currentLocked, setCurrentLocked] = useState(branch.branchStatus === 'LOCKED');
-  const [staffTab, setStaffTab]       = useState<StaffTab>('assigned');
-  const topRef                        = useRef<HTMLDivElement>(null);
-  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [details, setDetails]               = useState<BranchDetailsResponse | null>(null);
+  const [loadingDetails, setLoadingDetails]  = useState(true);
+  const [liveRadius, setLiveRadius]          = useState<number | null>(null);
+  const [togglingLock, setTogglingLock]      = useState(false);
+  const [currentLocked, setCurrentLocked]    = useState(branch.branchStatus === 'LOCKED');
+  const [staffTab, setStaffTab]              = useState<StaffTab>('assigned');
+  const topRef                               = useRef<HTMLDivElement>(null);
+  const [showBackToTop, setShowBackToTop]    = useState(false);
+  const [settingsSectionOpen, setSettingsSectionOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setShowBackToTop(window.scrollY > 400);
@@ -242,7 +243,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
     return list?.length === 0 ? (
       <p className="text-sm text-muted-foreground text-center py-6">{emptyMsg}</p>
     ) : (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 overflow-y-auto max-h-72 pr-1">
         {list?.map((u) => (
           <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
             <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${avatarClass}`}>
@@ -258,8 +259,19 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
     );
   };
 
+  // Format shift display
+  const shiftDisplay = (() => {
+    const s = details?.shiftStart ?? branch.shiftStart;
+    const e = details?.shiftEnd   ?? branch.shiftEnd;
+    if (s && e) return `${s} – ${e}`;
+    if (s)      return `From ${s}`;
+    if (e)      return `Until ${e}`;
+    return 'Not set';
+  })();
+
   return (
     <div className="space-y-6" ref={topRef}>
+      {/* ── Back + Header ── */}
       <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="h-4 w-4" />
         Back to branches
@@ -276,6 +288,11 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
             <Unlock className="h-3 w-3" /> Unlocked
           </span>
         )}
+        {details?.status && (
+          <span className="inline-flex items-center text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium border border-border">
+            {details.status}
+          </span>
+        )}
         <div className="ml-auto">
           <Button size="sm" variant="outline" className="hidden sm:flex gap-2" onClick={handleToggleLock} disabled={togglingLock}>
             {togglingLock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : currentLocked ? <><Unlock className="h-3.5 w-3.5" />Unlock Branch</> : <><Lock className="h-3.5 w-3.5" />Lock Branch</>}
@@ -286,41 +303,99 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         </div>
       </div>
 
+      {/* ── Settings & Map — collapsible — TOP ── */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
+        <button
+          type="button"
+          onClick={() => setSettingsSectionOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors"
+        >
+          <span>Settings & Map</span>
+          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${settingsSectionOpen ? 'rotate-90' : ''}`} />
+        </button>
+        <AnimatePresence initial={false}>
+          {settingsSectionOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 border-t border-border">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                  <div className="flex flex-col">
+                    <LocationSettings
+                      branchId={branch.id}
+                      isLockedForCurrentUser={false}
+                      onRadiusChange={(r) => setLiveRadius(r)}
+                      onSaved={onSaved}
+                    />
+                  </div>
+                  <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {branch.displayName}</h3>
+                    <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
+                      <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Stat Cards ── */}
       {loadingDetails ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
       ) : details ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {[
-            { label: 'Total Staff',  value: details.totalAssignedStaff, className: 'text-foreground' },
-            { label: 'Active Now',   value: details.currentActiveCount, className: 'text-emerald-500' },
-            { label: 'Radius',       value: `${branch.radius}m`,        className: 'text-foreground' },
-            { label: 'Status',       value: currentLocked ? 'Locked' : 'Unlocked', className: currentLocked ? 'text-amber-500' : 'text-emerald-500' },
+            {
+              label: 'Total Staff',
+              value: details.totalAssignedStaff,
+              className: 'text-foreground',
+            },
+            {
+              label: 'Active Now',
+              value: details.currentActiveCount,
+              className: 'text-emerald-500',
+            },
+            {
+              label: 'Radius',
+              value: `${Number(liveRadius ?? branch.radius).toFixed(2)}m`,
+              className: 'text-foreground',
+            },
+            {
+              label: 'Lock Status',
+              value: currentLocked ? 'Locked' : 'Unlocked',
+              className: currentLocked ? 'text-amber-500' : 'text-emerald-500',
+            },
+            {
+              label: 'Shift Hours',
+              value: shiftDisplay,
+              className: 'text-foreground',
+            },
+            ...(details.autoClockOutDuration != null ? [{
+              label: 'Auto Clock-out',
+              value: `${Number(details.autoClockOutDuration).toFixed(2)}m`,
+              className: 'text-foreground',
+            }] : []),
+            ...(details.displayAvg != null ? [{
+              label: 'Avg Distance',
+              value: `${Number(details.displayAvg).toFixed(2)}m`,
+              className: 'text-foreground',
+            }] : []),
           ].map(({ label, value, className }) => (
             <div key={label} className="rounded-xl bg-muted/60 dark:bg-muted/30 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className={`text-lg font-bold mt-0.5 ${className}`}>{value}</p>
+              <p className={`text-lg font-bold mt-0.5 truncate ${className}`}>{value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <div className="flex flex-col">
-          <LocationSettings
-            branchId={branch.id}
-            isLockedForCurrentUser={false}
-            onRadiusChange={(r) => setLiveRadius(r)}
-            onSaved={onSaved}
-          />
-        </div>
-        <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
-          <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {branch.displayName}</h3>
-          <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
-            <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
-          </div>
-        </div>
-      </div>
-
+      {/* ── Staff Tabs — Assigned & Active Now ── */}
       {details && (
         <div className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] overflow-hidden">
           <div className="flex border-b border-border">

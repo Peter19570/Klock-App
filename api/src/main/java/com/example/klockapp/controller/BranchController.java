@@ -55,7 +55,7 @@ public class BranchController {
      * Admin/Super Admin: Branch dashboard showing Assigned Staff vs. Active Users.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+//    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> getBranchDetails(
             @PathVariable Long id) {
         BranchDetailsResponse response = branchService.getBranchDetails(id);

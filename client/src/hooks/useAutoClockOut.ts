@@ -19,7 +19,7 @@ const DEFAULT_DELAY_MS = 5 * 60 * 1000;
 
 function resolveDelayMs(branches: BranchResponse[]): number {
   const durations = branches
-    .map((b) => (b as BranchResponse & { autoClockOutDuration?: number }).autoClockOutDuration)
+    .map((b) => b.autoClockOutDuration)
     .filter((d): d is number => typeof d === 'number' && d > 0);
   if (durations.length === 0) return DEFAULT_DELAY_MS;
   return Math.min(...durations);
