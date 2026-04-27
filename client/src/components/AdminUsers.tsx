@@ -33,6 +33,31 @@ interface AdminUsersProps {
   onCreateUser?: () => void;
 }
 
+// ─── Role Pill ────────────────────────────────────────────────────────────────
+
+function RolePill({ role }: { role: import('@/types').UserRole }) {
+  if (role === 'SUPER_ADMIN') {
+    return (
+      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-500 border border-amber-400/30 shrink-0">
+        Super Admin
+      </span>
+    );
+  }
+  if (role === 'ADMIN') {
+    return (
+      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-primary/15 text-primary shrink-0">
+        Admin
+      </span>
+    );
+  }
+  // USER → Employee
+  return (
+    <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border shrink-0">
+      Employee
+    </span>
+  );
+}
+
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
 
 interface FilterModalProps {
@@ -741,20 +766,26 @@ export default function AdminUsers({
                     <p className="text-sm text-muted-foreground truncate mt-0.5">
                       {user.email}
                     </p>
-                    {/* Mobile: branch under name */}
-                    {user.homeBranchName && (
-                      <p className="sm:hidden text-xs text-muted-foreground/70 truncate mt-0.5">
-                        📍 {user.homeBranchName}
-                      </p>
-                    )}
+                    {/* Mobile: branch + role under name */}
+                    <div className="sm:hidden flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {user.homeBranchName && (
+                        <p className="text-xs text-muted-foreground/70 truncate">
+                          📍 {user.homeBranchName}
+                        </p>
+                      )}
+                      {user.role && <RolePill role={user.role} />}
+                    </div>
                   </button>
 
-                  {/* Desktop: branch name column — sits between text and actions */}
-                  {user.homeBranchName && (
-                    <span className="hidden sm:inline-flex items-center gap-1 text-xs text-muted-foreground/70 shrink-0 max-w-[160px] truncate">
-                      📍 {user.homeBranchName}
-                    </span>
-                  )}
+                  {/* Desktop: branch + role — sits between text and actions */}
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                    {user.homeBranchName && (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70 max-w-[160px] truncate">
+                        📍 {user.homeBranchName}
+                      </span>
+                    )}
+                    {user.role && <RolePill role={user.role} />}
+                  </div>
 
                   {/* Actions — revealed on hover */}
                   <div

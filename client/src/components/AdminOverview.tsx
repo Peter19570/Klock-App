@@ -255,22 +255,22 @@ function ClockOutBreakdown({ manual, automatic, loading }: { manual: number; aut
               <span className="text-[9px] text-muted-foreground">auto</span>
             </div>
           </div>
-          <div className="flex flex-col gap-3 flex-1">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-1 gap-4">
+            <div className="flex-1 rounded-xl bg-muted/40 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
                 <span className="text-xs font-medium text-foreground">Automatic</span>
               </div>
-              <p className="text-2xl font-bold text-foreground ml-4.5"><AnimatedNumber value={automatic} /></p>
-              <p className="text-[11px] text-muted-foreground ml-4.5">geofence triggered</p>
+              <p className="text-2xl font-bold text-foreground"><AnimatedNumber value={automatic} /></p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">geofence triggered</p>
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
+            <div className="flex-1 rounded-xl bg-muted/40 px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40 shrink-0" />
                 <span className="text-xs font-medium text-foreground">Manual</span>
               </div>
-              <p className="text-2xl font-bold text-foreground ml-4.5"><AnimatedNumber value={manual} /></p>
-              <p className="text-[11px] text-muted-foreground ml-4.5">user initiated</p>
+              <p className="text-2xl font-bold text-foreground"><AnimatedNumber value={manual} /></p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">user initiated</p>
             </div>
           </div>
         </div>

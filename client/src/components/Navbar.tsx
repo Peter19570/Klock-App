@@ -10,6 +10,7 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const isAdmin      = user?.role === 'ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isEmployee   = user?.role === 'USER';
 
   const [meData, setMeData] = useState<UserDetailResponse | null>(null);
 
@@ -47,6 +48,11 @@ export function Navbar() {
               Admin
             </span>
           )}
+          {isEmployee && (
+            <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+              Employee
+            </span>
+          )}
         </div>
 
         {/* Right side */}
@@ -66,7 +72,6 @@ export function Navbar() {
                   alt={displayName}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    // If the image fails to load, hide it so the fallback icon shows
                     (e.currentTarget as HTMLImageElement).style.display = 'none';
                   }}
                 />

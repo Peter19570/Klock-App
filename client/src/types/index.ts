@@ -38,6 +38,7 @@ export interface UserResponse {
   fullName: string;
   picture: string;
   homeBranchName?: string;
+  role?: UserRole;
 }
 
 // ─── User creation (Super Admin only) ────────────────────────────────────────

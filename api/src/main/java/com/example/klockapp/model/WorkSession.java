@@ -22,7 +22,7 @@ import java.util.List;
 public class WorkSession extends BaseEntity {
 
     @Column(nullable = false)
-    private LocalDate workDate; // e.g., 2026-04-13
+    private LocalDate workDate;
 
     @Enumerated(EnumType.STRING)
     private ArrivalStatus arrivalStatus = ArrivalStatus.ON_TIME;
