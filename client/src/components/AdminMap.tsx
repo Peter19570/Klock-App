@@ -324,7 +324,7 @@ export function AdminMap({
   }, [liveUsers, branches, onVisibleCountChange]);
 
   return (
-    <div className="w-full h-full rounded-xl overflow-hidden border border-border">
+    <div className="w-full h-full rounded-xl overflow-hidden border border-border" style={{ isolation: 'isolate' }}>
       <div ref={mapRef} className="w-full h-full" style={{ minHeight: 360 }} />
     </div>
   );

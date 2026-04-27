@@ -109,7 +109,7 @@ public class SessionController {
     public ResponseEntity<ApiResponse<Boolean>> isActive(
             @AuthenticationPrincipal CustomUserPrincipal principal) {
 
-        boolean active = attendanceService.isActive(principal);
+        boolean active = attendanceService.isActive(principal.user());
         return ResponseEntity.ok(new ApiResponse<>("Active status check", active));
     }
 

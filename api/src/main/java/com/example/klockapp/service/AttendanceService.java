@@ -310,8 +310,8 @@ public class AttendanceService {
      * Check db for an active clock-in event (Session) to assist client with clock-in button toggle
      * */
     @Transactional(readOnly = true)
-    public boolean isActive(CustomUserPrincipal principal) {
-        return clockEventRepo.existsByWorkSessionUserAndClockOutTimeIsNull(principal.user());
+    public boolean isActive(User user) {
+        return clockEventRepo.existsByWorkSessionUserAndClockOutTimeIsNull(user);
     }
 
     /**

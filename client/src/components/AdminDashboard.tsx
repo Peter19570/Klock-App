@@ -303,48 +303,6 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         </div>
       </div>
 
-      {/* ── Settings & Map — collapsible — TOP ── */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-        <button
-          type="button"
-          onClick={() => setSettingsSectionOpen((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors"
-        >
-          <span>Settings & Map</span>
-          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${settingsSectionOpen ? 'rotate-90' : ''}`} />
-        </button>
-        <AnimatePresence initial={false}>
-          {settingsSectionOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22 }}
-              className="overflow-hidden"
-            >
-              <div className="p-4 border-t border-border">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-                  <div className="flex flex-col">
-                    <LocationSettings
-                      branchId={branch.id}
-                      isLockedForCurrentUser={false}
-                      onRadiusChange={(r) => setLiveRadius(r)}
-                      onSaved={onSaved}
-                    />
-                  </div>
-                  <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {branch.displayName}</h3>
-                    <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
-                      <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
       {/* ── Stat Cards ── */}
       {loadingDetails ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -387,13 +345,55 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
               className: 'text-foreground',
             }] : []),
           ].map(({ label, value, className }) => (
-            <div key={label} className="rounded-xl bg-muted/60 dark:bg-muted/30 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
+            <div key={label} className="rounded-xl bg-card border border-border p-3 shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)] flex flex-col items-center text-center">
               <p className="text-xs text-muted-foreground">{label}</p>
               <p className={`text-lg font-bold mt-0.5 truncate ${className}`}>{value}</p>
             </div>
           ))}
         </div>
       ) : null}
+
+      {/* ── Settings & Map — collapsible ── */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
+        <button
+          type="button"
+          onClick={() => setSettingsSectionOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors"
+        >
+          <span>Settings & Map</span>
+          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${settingsSectionOpen ? 'rotate-90' : ''}`} />
+        </button>
+        <AnimatePresence initial={false}>
+          {settingsSectionOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 border-t border-border">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                  <div className="flex flex-col">
+                    <LocationSettings
+                      branchId={branch.id}
+                      isLockedForCurrentUser={false}
+                      onRadiusChange={(r) => setLiveRadius(r)}
+                      onSaved={onSaved}
+                    />
+                  </div>
+                  <div className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Live radius preview — {branch.displayName}</h3>
+                    <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden">
+                      <AdminMap branches={[previewBranch]} liveUsers={new Map()} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* ── Staff Tabs — Assigned & Active Now ── */}
       {details && (
