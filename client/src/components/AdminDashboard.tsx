@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import * as ReactDOM from 'react-dom';
 import {
   LayoutDashboard, Users, Clock, GitBranch, Plus, Trash2, Loader2,
   Lock, Unlock, X, MapPin, ChevronRight, ArrowLeft, Maximize2,
-  Minimize2, Menu, ArrowUp, Users2, RefreshCw, ShieldCheck,
+  Minimize2, Menu, ArrowUp, Users2, RefreshCw, ShieldCheck, MoreVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -175,6 +176,71 @@ function BranchFormModal({ open, onClose, onSaved, notify }: BranchFormModalProp
         </div>
       </motion.div>
     </div>
+  );
+}
+
+// ── Branch Action Sheet (mobile) ─────────────────────────────────────────────
+interface BranchActionSheetProps {
+  open: boolean;
+  branch: BranchResponse | null;
+  onClose: () => void;
+  onView: () => void;
+  onDelete: () => void;
+}
+
+function BranchActionSheet({ open, branch, onClose, onView, onDelete }: BranchActionSheetProps) {
+  if (!branch) return null;
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end justify-center bg-black/40 backdrop-blur-sm z-[80]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="w-full max-w-lg bg-card rounded-t-2xl border-t border-border shadow-xl pb-safe"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            {/* Branch name */}
+            <div className="px-5 pt-2 pb-4 border-b border-border">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-0.5">Branch</p>
+              <p className="text-sm font-semibold text-foreground truncate">{branch.displayName}</p>
+            </div>
+            {/* Actions */}
+            <div className="flex flex-col py-2">
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                onClick={() => { onView(); onClose(); }}
+              >
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                View Branch
+              </button>
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-destructive hover:bg-destructive/5 transition-colors"
+                onClick={() => { onDelete(); onClose(); }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Branch
+              </button>
+            </div>
+            <div className="px-5 pb-5 pt-1">
+              <Button variant="outline" className="w-full" onClick={onClose}>Cancel</Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -570,6 +636,7 @@ export function AdminDashboard() {
   const [deleting, setDeleting]       = useState(false);
   const [showAllBranches, setShowAllBranches] = useState(false);
   const [refreshingBranches, setRefreshingBranches] = useState(false);
+  const [actionSheetBranch, setActionSheetBranch] = useState<BranchResponse | null>(null);
 
   const { users: liveUsers } = useAdminWebSocket();
   const [visibleUserCount, setVisibleUserCount] = useState(0);
@@ -998,6 +1065,15 @@ export function AdminDashboard() {
                                 </p>
                               </button>
 
+                              {/* Mobile: kebab menu button */}
+                              <button
+                                className="sm:hidden flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0"
+                                onClick={(e) => { e.stopPropagation(); setActionSheetBranch(b); }}
+                                title="Branch actions"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+
                               {/* Desktop: status badge + actions — badge sits flush right, shifts left on hover to reveal buttons */}
                               <div className="hidden sm:flex items-center gap-2 shrink-0">
                                 {/* Status badge — always visible */}
@@ -1094,6 +1170,14 @@ export function AdminDashboard() {
           }}
         />
       )}
+
+      <BranchActionSheet
+        open={actionSheetBranch !== null}
+        branch={actionSheetBranch}
+        onClose={() => setActionSheetBranch(null)}
+        onView={() => { if (actionSheetBranch) setSelectedBranch(actionSheetBranch); }}
+        onDelete={() => { if (actionSheetBranch) setDeletingBranchId(actionSheetBranch.id); }}
+      />
     </div>
   );
 }

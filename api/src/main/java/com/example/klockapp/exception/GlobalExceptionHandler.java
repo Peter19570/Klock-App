@@ -133,4 +133,11 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>("CSV Error", ex.getMessage()));
     }
+
+    @ExceptionHandler(ExpiredClockInRequestException.class)
+    public ResponseEntity<ApiResponse<String>> handleExpiredError(ExpiredClockInRequestException ex){
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>("Clock-in expired", ex.getMessage()));
+    }
 }

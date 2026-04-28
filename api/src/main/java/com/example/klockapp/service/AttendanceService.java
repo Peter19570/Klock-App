@@ -6,6 +6,7 @@ import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
 import com.example.klockapp.enums.*;
+import com.example.klockapp.exception.custom.ExpiredClockInRequestException;
 import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.exception.custom.WriteToCSVException;
 import com.example.klockapp.filter.SessionFilter;
@@ -58,13 +59,27 @@ public class AttendanceService {
     public ClockEventResponse clockIn(User user, ClockInRequest request)
             throws BadRequestException {
 
-        // Calculate time diff btw the client and server times
-        long diff = Math.abs(Duration.between(request.clientTimeStamp(), LocalTime.now()).getSeconds());
+        // Calculate time diff btw the client and server times in seconds
+        long normalDiff = Math.abs(Duration.between(request.clientTimeStamp(), LocalTime.now()).getSeconds());
+        long delayedDiff = Math.abs(Duration.between(request.clientTimeStamp(), LocalTime.now()).getSeconds());
 
         // Guardrail: Prohibit double clock-in across the system
         if (clockEventRepo.existsByWorkSessionUserAndClockOutTimeIsNull(user)) {
             throw new IllegalStateException(
                     "You must clock out of your current branch before clocking in elsewhere.");
+        }
+
+        if (true == request.isDelaySync()){
+            // Ensures that the clock-in request is actually valid 🙂
+            if (delayedDiff > 86400){
+                throw new ExpiredClockInRequestException("Clock in request is expired");
+            }
+        } else {
+            // Validates request timestamps and rejects those outside the acceptable server time window.
+            if (normalDiff > 30) {
+                log.warn("Client time does not match server time.");
+                throw new BadRequestException("Time mismatch between client and server");
+            }
         }
 
         // Smart Discovery: Backend iterates through branches and matches radius
@@ -105,12 +120,6 @@ public class AttendanceService {
         double distance = LocationUtility.calculateDistance(
                 request.latitude(), request.longitude(),
                 targetBranch.getLatitude(), targetBranch.getLongitude());
-
-        // Validates request timestamps and rejects those outside the acceptable server time window.
-        if (diff > 30) {
-            log.warn("Client time does not match server time.");
-            throw new BadRequestException("Time mismatch between client and server");
-        }
 
         // Workday Container: Find today's session or create the first one
         WorkSession session = workSessionRepo.findByWorkDateAndUser(LocalDate.now(), user)

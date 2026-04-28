@@ -454,7 +454,7 @@ export default function AuditLogsPage() {
         <div>
           <h2 className="text-base font-bold text-foreground">Audit Logs</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            System-wide clock events with contextual metadata.
+            System-wide clock events with contextual metadata. New logs at the top.
           </p>
         </div>
         <div className="flex items-center gap-2">

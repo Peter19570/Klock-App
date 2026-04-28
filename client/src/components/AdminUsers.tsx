@@ -3,7 +3,7 @@ import * as ReactDOM from 'react-dom';
 import {
   Search, Trash2, ChevronLeft, ChevronRight, User, Plus,
   ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
-  FileText, MapPin, Navigation,
+  FileText, MapPin, Navigation, MoreVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -472,7 +472,161 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
+// ─── User Action Sheet (mobile) ────────────────────────────────────────────────
+
+interface UserActionSheetProps {
+  open: boolean;
+  user: UserResponse | null;
+  isSuperAdmin: boolean;
+  hasBranches: boolean;
+  onClose: () => void;
+  onTransfer: () => void;
+  onDelete: () => void;
+}
+
+function UserActionSheet({ open, user, isSuperAdmin, hasBranches, onClose, onTransfer, onDelete }: UserActionSheetProps) {
+  if (!user) return null;
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end justify-center bg-black/40 backdrop-blur-sm z-[80]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="w-full max-w-lg bg-card rounded-t-2xl border-t border-border shadow-xl pb-safe"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            {/* User info */}
+            <div className="px-5 pt-2 pb-4 border-b border-border">
+              <p className="text-sm font-semibold text-foreground truncate">{user.fullName}</p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+            </div>
+            {/* Actions */}
+            <div className="flex flex-col py-2">
+              {isSuperAdmin && hasBranches && (
+                <button
+                  className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                  onClick={() => { onTransfer(); onClose(); }}
+                >
+                  <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                  Transfer Branch
+                </button>
+              )}
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-destructive hover:bg-destructive/5 transition-colors"
+                onClick={() => { onDelete(); onClose(); }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete User
+              </button>
+            </div>
+            <div className="px-5 pb-5 pt-1">
+              <Button variant="outline" className="w-full" onClick={onClose}>Cancel</Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 type UserView = 'list' | 'sessions' | 'logs' | 'location';
+
+// ─── User Detail Header Actions ────────────────────────────────────────────────
+
+function UserDetailHeaderActions({
+  onLocation,
+  onLogs,
+}: {
+  onLocation: () => void;
+  onLogs: () => void;
+}) {
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+
+  return (
+    <>
+      {/* Mobile: single kebab → bottom sheet */}
+      <button
+        className="sm:hidden flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0"
+        onClick={() => setSheetOpen(true)}
+        title="More actions"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+
+      {/* Desktop: both buttons inline */}
+      <div className="hidden sm:flex items-center gap-2 shrink-0">
+        <Button variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={onLocation}>
+          <MapPin className="h-3.5 w-3.5" />
+          View Location History
+        </Button>
+        <Button variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={onLogs}>
+          <FileText className="h-3.5 w-3.5" />
+          Logs
+        </Button>
+      </div>
+
+      {/* Mobile action sheet */}
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {sheetOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="sm:hidden fixed inset-0 flex items-end justify-center bg-black/40 backdrop-blur-sm z-[90]"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setSheetOpen(false); }}
+            >
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                className="w-full max-w-lg bg-card rounded-t-2xl border-t border-border shadow-xl pb-safe"
+              >
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+                </div>
+                <div className="flex flex-col py-2">
+                  <button
+                    className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                    onClick={() => { setSheetOpen(false); onLocation(); }}
+                  >
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    View Location History
+                  </button>
+                  <button
+                    className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                    onClick={() => { setSheetOpen(false); onLogs(); }}
+                  >
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    Logs
+                  </button>
+                </div>
+                <div className="px-5 pb-5 pt-1">
+                  <Button variant="outline" className="w-full" onClick={() => setSheetOpen(false)}>Cancel</Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+    </>
+  );
+}
 
 export default function AdminUsers({
   isSuperAdmin = false,
@@ -502,6 +656,7 @@ export default function AdminUsers({
   const [selectedUser, setSelectedUser] = React.useState<UserDetailResponse | null>(null);
   const [loadingUser, setLoadingUser]   = React.useState<number | null>(null);
   const [userView, setUserView]         = React.useState<UserView>('list');
+  const [actionSheetUser, setActionSheetUser] = React.useState<UserResponse | null>(null);
 
   const fetchUsers = React.useCallback(async (page: number) => {
     setLoading(true);
@@ -616,28 +771,12 @@ export default function AdminUsers({
         user={selectedUser}
         onBack={handleBackToList}
         canUndo={false}
-        // Extra action bar: Logs + Location History buttons
+        embedded
         headerActions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 h-9"
-              onClick={() => setUserView('location')}
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              View Location History
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2 h-9"
-              onClick={() => setUserView('logs')}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Logs
-            </Button>
-          </div>
+          <UserDetailHeaderActions
+            onLocation={() => setUserView('location')}
+            onLogs={() => setUserView('logs')}
+          />
         }
       />
     );
@@ -777,6 +916,15 @@ export default function AdminUsers({
                     </div>
                   </button>
 
+                  {/* Mobile: kebab menu */}
+                  <button
+                    className="sm:hidden flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0"
+                    onClick={(e) => { e.stopPropagation(); setActionSheetUser(user); }}
+                    title="User actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+
                   {/* Desktop: info + actions — info sits flush right, nudges left on hover to reveal action buttons */}
                   <div className="hidden sm:flex items-center gap-2 shrink-0">
                     {/* Info chips — always visible, shift left on hover */}
@@ -876,6 +1024,54 @@ export default function AdminUsers({
         onConfirm={handleTransfer}
         onCancel={() => { setTransferUserId(null); setTransferBranchId(null); }}
       />
+
+      <UserActionSheet
+        open={actionSheetUser !== null}
+        user={actionSheetUser}
+        isSuperAdmin={isSuperAdmin}
+        hasBranches={branches.length > 0}
+        onClose={() => setActionSheetUser(null)}
+        onTransfer={() => { if (actionSheetUser) { setTransferUserId(actionSheetUser.id); setTransferBranchId(null); } }}
+        onDelete={() => { if (actionSheetUser) setDeleteConfirm(actionSheetUser.id); }}
+      />
+
+      {/* Mobile delete confirm — shown when deleteConfirm is set but action came from mobile sheet */}
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {deleteConfirm !== null && !users.find(u => u.id === deleteConfirm) === false && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="sm:hidden fixed inset-0 flex items-end justify-center bg-black/40 backdrop-blur-sm z-[90]"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setDeleteConfirm(null); }}
+            >
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                className="w-full max-w-lg bg-card rounded-t-2xl border-t border-border shadow-xl pb-safe"
+              >
+                <div className="flex justify-center pt-3 pb-1">
+                  <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+                </div>
+                <div className="px-5 pt-3 pb-5">
+                  <p className="text-sm font-semibold text-foreground mb-1">Delete user?</p>
+                  <p className="text-xs text-muted-foreground mb-5">
+                    {users.find(u => u.id === deleteConfirm)?.fullName ?? 'This user'} will be permanently removed.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+                    <Button variant="destructive" className="flex-1" onClick={() => handleDelete(deleteConfirm!)}>Delete</Button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 @RestController
@@ -32,7 +33,10 @@ public class AuditLogController {
                 .maxCreatedAt(maxCreatedAt)
                 .auditOption(auditOption)
                 .build();
-        List<AuditLogResponse> response = auditLogService.showAllLogs(filter);
+        List<AuditLogResponse> response = auditLogService.showAllUserLogs(filter)
+                .stream()
+                .sorted(Comparator.comparing(AuditLogResponse::createdAt).reversed())
+                .toList();
         return ResponseEntity.ok(new ApiResponse<>("All Logs", response));
     }
 
@@ -49,7 +53,10 @@ public class AuditLogController {
                 .auditOption(auditOption)
                 .userId(id)
                 .build();
-        List<AuditLogResponse> response = auditLogService.showAllUserLogs(filter);
+        List<AuditLogResponse> response = auditLogService.showAllUserLogs(filter)
+                .stream()
+                .sorted(Comparator.comparing(AuditLogResponse::createdAt).reversed())
+                .toList();
         return ResponseEntity.ok(new ApiResponse<>("All User Logs", response));
     }
 }

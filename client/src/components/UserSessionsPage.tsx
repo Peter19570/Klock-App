@@ -19,6 +19,8 @@ interface SessionPageContentProps {
   displayName?: string;
   onBack?: () => void;
   headerActions?: React.ReactNode;
+  /** When true, strips the component's own px/py so the parent container controls spacing */
+  embedded?: boolean;
 }
 
 function SessionPageContent({
@@ -26,6 +28,7 @@ function SessionPageContent({
   displayName,
   onBack,
   headerActions,
+  embedded = false,
 }: SessionPageContentProps) {
   const navigate = useNavigate();
 
@@ -110,8 +113,8 @@ function SessionPageContent({
   return (
     <div className="min-h-screen bg-background">
       {/* ── Sticky header — max-w-5xl matches Dashboard ── */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+      <div className={`${embedded ? '' : 'sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border'}`}>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
@@ -159,7 +162,7 @@ function SessionPageContent({
       </div>
 
       {/* ── Content — max-w-5xl, px-4 sm:px-6, py-8 matches Dashboard ── */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className={`max-w-5xl mx-auto space-y-8 ${embedded ? 'px-0 py-4' : 'px-4 sm:px-6 py-8'}`}>
         {initialLoad ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -200,6 +203,8 @@ interface UserSessionsPageProps {
   /** @deprecated Undo endpoints are disabled — prop kept for API compatibility */
   canUndo?: boolean;
   headerActions?: React.ReactNode;
+  /** When rendered inside AdminDashboard, pass true to avoid double padding */
+  embedded?: boolean;
 }
 
 export default function UserSessionsPage({
@@ -207,6 +212,7 @@ export default function UserSessionsPage({
   user,
   onBack,
   headerActions,
+  embedded = false,
 }: UserSessionsPageProps) {
   const { userId: paramUserId } = useParams<{ userId: string }>();
 
@@ -229,6 +235,7 @@ export default function UserSessionsPage({
       displayName={displayName}
       onBack={onBack}
       headerActions={headerActions}
+      embedded={embedded}
     />
   );
 }

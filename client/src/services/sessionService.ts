@@ -12,7 +12,7 @@ import type {
   AuditLogResponse,
 } from '../types';
 
-// ─── Query params ─────────────────────────────────────────────────────────────
+// ─── Query params ──────────────────────────────────────────────────────────────
 
 export interface GetUserSessionsParams {
   page?: number;
@@ -28,52 +28,57 @@ export interface GetUserSessionsByIdParams extends GetUserSessionsParams {
 }
 
 export interface GetAdminSessionsParams extends GetUserSessionsParams {
-  // NOTE: branchId filter was removed from the new API — dropped here too
+  // branchId filter removed from API — not included
 }
 
-// ─── User endpoints ───────────────────────────────────────────────────────────
+// ─── User session endpoints ────────────────────────────────────────────────────
 
-// FIXED: /api/v1/sessions/all → /api/v1/sessions
 export const getUserSessions = (params: GetUserSessionsParams = {}) =>
   api.get<ApiResponse<PageResponse<SessionResponse>>>('/api/v1/sessions', { params });
 
 /** Backward-compat alias */
 export const getAllSessions = getUserSessions;
 
-// ─── Admin endpoints ──────────────────────────────────────────────────────────
+// ─── Admin session endpoints ───────────────────────────────────────────────────
 
 export const getUserSessionsById = ({ userId, ...params }: GetUserSessionsByIdParams) =>
   api.get<ApiResponse<PageResponse<SessionResponse>>>(`/api/v1/sessions/${userId}`, { params });
 
-// FIXED: /api/v1/sessions/all → /api/v1/sessions
 export const getAdminSessions = (params: GetAdminSessionsParams = {}) =>
-  api.get<ApiResponse<PageResponse<AdminSessionResponse>>>(
-    '/api/v1/sessions',
-    { params },
-  );
+  api.get<ApiResponse<PageResponse<AdminSessionResponse>>>('/api/v1/sessions', { params });
 
 export const exportSessions = (start?: string, end?: string) =>
   api.get('/api/v1/sessions/export', {
     params: {
       ...(start && { start }),
-      ...(end && { end }),
+      ...(end   && { end   }),
     },
     responseType: 'blob',
   });
 
 // ─── Clock actions ────────────────────────────────────────────────────────────
+//
+// ClockInRequest (from API schema):
+//   latitude, longitude, accuracy  — required
+//   isDelaySync                    — true when submitting a queued offline event
+//   clientTimeStamp                — HH:mm:ss of zone-entry or click time
+//   deviceId, batteryLevel, signalStrength — optional diagnostics
+//
+// ClockOutRequest (from API schema):
+//   clockOutType                   — 'MANUAL' | 'AUTOMATIC'
+//   latitude, longitude            — required
+//   clientTimeStamp, isDelaySync   — present on offline-queued events
 
 export const clockIn = (data: ClockInRequest) =>
   api.post<ApiResponse<ClockEventResponse>>('/api/v1/sessions/start', data);
 
-// FIXED: ClockOutRequest now requires latitude + longitude
 export const clockOut = (data: ClockOutRequest) =>
   api.put<ApiResponse<ClockEventResponse>>('/api/v1/sessions/end', data);
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+// ─── Status helpers ────────────────────────────────────────────────────────────
 
 export const isActive = async (): Promise<boolean> => {
-  const res = await api.get<ApiResponse<boolean> | boolean>('/api/v1/sessions/active');
+  const res     = await api.get<ApiResponse<boolean> | boolean>('/api/v1/sessions/active');
   const payload = res.data;
   if (typeof payload === 'boolean') return payload;
   if (payload && typeof (payload as ApiResponse<boolean>).data === 'boolean') {
@@ -84,9 +89,8 @@ export const isActive = async (): Promise<boolean> => {
 
 export const getTodaySession = async (): Promise<SessionResponse | null> => {
   const today = new Date().toISOString().split('T')[0];
-  const res = await getUserSessions({
-    page: 0,
-    size: 1,
+  const res   = await getUserSessions({
+    page: 0, size: 1,
     minWorkDate: today,
     maxWorkDate: today,
   });
@@ -108,34 +112,30 @@ export const hasManuallyClockedOutToday = async (): Promise<boolean> => {
   );
 };
 
-// ─── Location History (NEW) ───────────────────────────────────────────────────
+// ─── Location history ─────────────────────────────────────────────────────────
 
-/** POST /api/v1/location/ping — send periodic location while clocked in */
 export const sendLocationPing = (data: LocationRequest) =>
   api.post<void>('/api/v1/location/ping', data);
 
-/** GET /api/v1/location/history/{id} — fetch a user's location history */
 export const getLocationHistory = (
   userId: number,
   params: { minWorkDate?: string; maxWorkDate?: string } = {},
 ) =>
   api.get<ApiResponse<LocationResponse[]>>(`/api/v1/location/history/${userId}`, { params });
 
-// ─── Offline Queue (re-exported for convenience) ──────────────────────────────
+// ─── Offline sync (re-exported for convenience) ───────────────────────────────
 
 /**
- * Call this to manually flush any queued offline clock-ins.
- * The hook handles this automatically on `online` events, but you can
- * also call it from a UI button (e.g. "Retry pending syncs").
+ * Flush all pending offline clock events (clock-in + clock-out) to the backend.
+ * Can be called from a "Sync Now" button or from the sync scheduler.
+ * Re-exported from syncEngine so callers only need one import.
  */
-export { flushOfflineClockInQueue } from '../hooks/useAutoClockIn';
+export { flushOfflineQueue as flushOfflineClockInQueue } from './syncEngine';
 
-// ─── Audit Log (NEW — SUPER_ADMIN only) ──────────────────────────────────────
+// ─── Audit logs (SUPER_ADMIN only) ────────────────────────────────────────────
 
-/** GET /api/v1/audit — all audit logs (filterable by date, actionType, search) */
 export const getAllAuditLogs = (params?: Record<string, string>) =>
   api.get<ApiResponse<AuditLogResponse[]>>('/api/v1/audit', { params });
 
-/** GET /api/v1/audit/{id} — audit logs for a specific user */
 export const getUserAuditLogs = (userId: number) =>
   api.get<ApiResponse<AuditLogResponse[]>>(`/api/v1/audit/${userId}`);
