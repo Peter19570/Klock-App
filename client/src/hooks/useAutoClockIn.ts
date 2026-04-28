@@ -192,7 +192,7 @@ export function useAutoClockIn({
             accuracy:        pos.accuracy ?? 0,
             clientTimestamp: zoneEnteredAt.toISOString(),
           });
-          onNotify('warning', 'No connection — clock-in saved and will sync when back online.');
+          // silent — the pending banner in UserDashboard communicates this
         } catch {
           onNotify('error', 'Failed to save offline clock-in. Please try again.');
         }

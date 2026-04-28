@@ -205,13 +205,39 @@ export function UserDashboard() {
         notify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
         refreshOfflineState();
         fetchSessionsRef.current();
+        setIsSyncing(false);
       },
       onFailed: (_evt, reason) => {
         notify('error', `An offline event failed to sync: ${reason}`);
         refreshOfflineState();
+        setIsSyncing(false);
       },
     });
     return stop;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Auto-flush on mount if online + pending events exist ────────────────
+  useEffect(() => {
+    if (!navigator.onLine) return;
+    getPendingCount().then((count) => {
+      if (count === 0) return;
+      setIsSyncing(true);
+      flushOfflineQueue({
+        onSynced: (n) => {
+          notify('success', `Synced ${n} offline clock event${n !== 1 ? 's' : ''}.`);
+          refreshOfflineState();
+          fetchSessionsRef.current();
+        },
+        onFailed: (_evt, reason) => {
+          notify('error', `An offline event failed to sync: ${reason}`);
+          refreshOfflineState();
+        },
+      }).finally(() => {
+        refreshOfflineState();
+        setIsSyncing(false);
+      });
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -755,20 +781,15 @@ export function UserDashboard() {
                 {pendingCount} clock event{pendingCount !== 1 ? 's' : ''} pending sync
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {navigator.onLine
-                  ? 'Connection restored — tap Sync Now to submit.'
+                {isSyncing
+                  ? 'Syncing…'
+                  : navigator.onLine
+                  ? 'Syncing automatically…'
                   : 'Offline — will sync automatically when back online.'}
               </p>
             </div>
-            {navigator.onLine && (
-              <button
-                onClick={handleManualFlush}
-                disabled={isSyncing}
-                className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 transition-colors disabled:opacity-50 shrink-0"
-              >
-                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Syncing…' : 'Sync Now'}
-              </button>
+            {isSyncing && (
+              <RefreshCw className="w-4 h-4 shrink-0 text-amber-500 animate-spin" />
             )}
           </motion.div>
         )}
@@ -891,31 +912,6 @@ export function UserDashboard() {
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {offlineButtonState.hasPendingPair && (
-              <motion.p
-                key="offline-pair"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground border border-dashed border-amber-400/40 rounded-lg p-3"
-              >
-                ⏳ Clock-out saved offline — will complete your session when you sync.
-              </motion.p>
-            )}
-
-            {/* Pending clock-in, can still clock out */}
-            {!offlineButtonState.hasPendingPair && offlineButtonState.pendingClockInCount > 0 && (
-              <motion.p
-                key="offline-in"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground border border-dashed border-amber-400/40 rounded-lg p-3"
-              >
-                📶 Clock-in pending sync (offline) — you can still clock out below.
-              </motion.p>
-            )}
-
             {/* Session done online */}
             {sessionDoneForToday && !cooldownActive && countdownSeconds === null && !offlineButtonState.hasPendingPair && (
               <motion.p
@@ -926,30 +922,6 @@ export function UserDashboard() {
                 className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-3"
               >
                 ✅ You have clocked out for today. See you tomorrow!
-              </motion.p>
-            )}
-
-            {cooldownActive && (
-              <motion.p
-                key="cooldown"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-3"
-              >
-                ⏳ Still in zone. Checking if auto clock-in is needed in ~1 minute.
-              </motion.p>
-            )}
-
-            {(manualClockInEnabled || manualClockOutEnabled) && !cooldownActive && !sessionDoneForToday && !offlineButtonState.pendingClockInCount && (
-              <motion.p
-                key="manual"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-3"
-              >
-                ⚠️ Auto clock-in/out failed after 3 retries. Manual action is now enabled.
               </motion.p>
             )}
           </AnimatePresence>

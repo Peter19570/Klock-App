@@ -23,6 +23,7 @@
 import { clockIn, clockOut } from './sessionService';
 import {
   getPendingEvents,
+  deleteEvent,
   markEventSynced,
   markEventFailed,
   incrementRetry,
@@ -92,6 +93,7 @@ async function syncEvent(event: PendingEvent): Promise<'synced' | 'failed' | 'sk
       });
       const serverTs = res.data?.data?.clockInTime ?? new Date().toISOString();
       await markEventSynced(event.id, serverTs);
+      await deleteEvent(event.id);
       return 'synced';
     }
 
@@ -105,6 +107,7 @@ async function syncEvent(event: PendingEvent): Promise<'synced' | 'failed' | 'sk
       });
       const serverTs = res.data?.data?.clockOutTime ?? new Date().toISOString();
       await markEventSynced(event.id, serverTs);
+      await deleteEvent(event.id);
       return 'synced';
     }
 

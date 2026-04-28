@@ -304,7 +304,10 @@ export async function incrementRetry(eventId: string): Promise<number> {
   return next;
 }
 
-/** Mark both event + its parent session as synced. */
+/**
+ * Mark event as synced. deleteEvent() is always called right after this
+ * in syncEngine, so we just stamp the status — no need to update the session.
+ */
 export async function markEventSynced(
   eventId: string,
   serverTimestamp: string,
@@ -312,21 +315,8 @@ export async function markEventSynced(
   const db  = await openDB();
   const evt = await txGet<PendingEvent>(db, STORE_EVENTS, eventId);
   if (!evt) return;
-
   await txPut(db, STORE_EVENTS, { ...evt, status: 'synced', serverTimestamp });
-
-  // Update the parent session status
-  const session = await txGet<OfflineSession>(db, STORE_SESSIONS, evt.sessionId);
-  if (!session) return;
-
-  if (evt.type === 'clock_out') {
-    // Both sides now synced
-    await txPut(db, STORE_SESSIONS, { ...session, status: 'completed' });
-  }
-  // For clock_in, session stays 'pending_in' until clock_out is also synced
-  // (or there is no clock_out queued, which is fine — session stays open on server)
-
-  dispatchQueueUpdate();
+  // deleteEvent() will remove both the event and session record immediately after
 }
 
 /**
@@ -434,6 +424,28 @@ export async function getOpenOfflineSession(): Promise<OfflineSession | null> {
   const db       = await openDB();
   const sessions = await txGetAll<OfflineSession>(db, STORE_SESSIONS);
   return sessions.find((s) => s.status === 'pending_in') ?? null;
+}
+
+/**
+ * Permanently remove a synced event from IDB.
+ * Always removes the parent session record too — once an event is synced
+ * the server owns the session, no need to track it locally anymore.
+ */
+export async function deleteEvent(eventId: string): Promise<void> {
+  const db  = await openDB();
+  const evt = await txGet<PendingEvent>(db, STORE_EVENTS, eventId);
+  if (!evt) return;
+
+  // Delete event + session atomically in one transaction
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([STORE_EVENTS, STORE_SESSIONS], 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+    tx.objectStore(STORE_EVENTS).delete(eventId);
+    tx.objectStore(STORE_SESSIONS).delete(evt.sessionId);
+  });
+
+  dispatchQueueUpdate();
 }
 
 /** Hard-clear everything (dev/test utility). */
