@@ -361,10 +361,53 @@ export function UserDashboard() {
     if (!position) { notify('error', 'Location not available.'); return; }
     setActionLoading(true);
     try {
+      // Gather diagnostics — mirrors useAutoClockIn's ensureDeviceRegistered / helpers
+      const deviceId = await (async () => {
+        const stored = localStorage.getItem('klock_device_id');
+        if (stored) return stored;
+        const ua  = navigator.userAgent + navigator.language + screen.width + screen.height;
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ua));
+        const id  = Array.from(new Uint8Array(buf))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+          .slice(0, 32);
+        localStorage.setItem('klock_device_id', id);
+        return id;
+      })();
+
+      let batteryLevel: number | undefined;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nav = navigator as any;
+        if (typeof nav.getBattery === 'function') {
+          const bat = await nav.getBattery();
+          batteryLevel = Math.round(bat.level * 100);
+        }
+      } catch { /* unavailable */ }
+
+      let signalStrength: number | undefined;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const conn = (navigator as any).connection;
+        if (conn) {
+          if (conn.downlink >= 10) signalStrength = 4;
+          else if (conn.downlink >= 5)  signalStrength = 3;
+          else if (conn.downlink >= 1)  signalStrength = 2;
+          else if (conn.downlink > 0)   signalStrength = 1;
+          else signalStrength = 0;
+        }
+      } catch { /* unavailable */ }
+
+      const now = new Date();
       const res = await clockIn({
-        latitude:  position.latitude,
-        longitude: position.longitude,
-        accuracy:  position.accuracy ?? 0,
+        latitude:        position.latitude,
+        longitude:       position.longitude,
+        accuracy:        position.accuracy ?? 0,
+        deviceId,
+        batteryLevel,
+        signalStrength,
+        clientTimeStamp: now.toTimeString().slice(0, 8),
+        isDelaySync:     false,
       });
       await handleClockInSuccess(res.data.data.id);
       notify('success', 'Clocked in successfully.');
@@ -435,7 +478,6 @@ export function UserDashboard() {
             try {
               // Gather diagnostics the same way useAutoClockIn does
               const zoneEnteredAt = new Date();
-              const deviceId = localStorage.getItem('klock_device_id') ?? undefined;
               let batteryLevel: number | undefined;
               try {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -458,11 +500,25 @@ export function UserDashboard() {
                 }
               } catch { /* unavailable */ }
 
+              // Resolve deviceId properly — mirrors ensureDeviceRegistered()
+              const resolvedDeviceId = await (async () => {
+                const stored = localStorage.getItem('klock_device_id');
+                if (stored) return stored;
+                const ua  = navigator.userAgent + navigator.language + screen.width + screen.height;
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ua));
+                const id  = Array.from(new Uint8Array(buf))
+                  .map((b) => b.toString(16).padStart(2, '0'))
+                  .join('')
+                  .slice(0, 32);
+                localStorage.setItem('klock_device_id', id);
+                return id;
+              })();
+
               const res = await clockIn({
                 latitude:        pos.latitude,
                 longitude:       pos.longitude,
                 accuracy:        pos.accuracy ?? 0,
-                deviceId,
+                deviceId:        resolvedDeviceId,
                 batteryLevel,
                 signalStrength,
                 clientTimeStamp: zoneEnteredAt.toTimeString().slice(0, 8),
