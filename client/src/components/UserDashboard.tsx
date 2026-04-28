@@ -33,6 +33,7 @@ import {
   getPendingCount,
   getOfflineButtonState,
   getOpenOfflineSession,
+  enqueueClockIn,
   enqueueClockOut,
   runExpiryCleanup,
 } from '../services/offlineQueueService';
@@ -139,14 +140,32 @@ export function UserDashboard() {
 
   // ─── Online / offline tracking ───────────────────────────────────────────
   useEffect(() => {
-    const handleOnline  = () => { setIsOffline(false); refreshOfflineState(); };
-    const handleOffline = () => { setIsOffline(true);  refreshOfflineState(); };
+    const handleOnline = async () => {
+      setIsOffline(false);
+      refreshOfflineState();
+      // Re-check server active status on reconnect — but only if no offline
+      // events are queued, to avoid racing with the sync flush.
+      try {
+        const pending = await getPendingCount();
+        if (pending === 0) {
+          const activeStatus = await isActive();
+          setIsClockedIn(activeStatus);
+          if (activeStatus) {
+            await fetchActiveBranch();
+          } else {
+            setActiveBranchName(null);
+          }
+        }
+      } catch { /* silent — sync will reconcile */ }
+    };
+    const handleOffline = () => { setIsOffline(true); refreshOfflineState(); };
     window.addEventListener('online',  handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
       window.removeEventListener('online',  handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshOfflineState]);
 
   // Listen for IDB queue updates (dispatched by offlineQueueService)
@@ -185,7 +204,7 @@ export function UserDashboard() {
       onSynced: (count) => {
         notify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
         refreshOfflineState();
-        fetchSessions();
+        fetchSessionsRef.current();
       },
       onFailed: (_evt, reason) => {
         notify('error', `An offline event failed to sync: ${reason}`);
@@ -297,6 +316,8 @@ export function UserDashboard() {
   const handleClockOutSuccessRef = useRef<() => Promise<void>>(async () => {});
   const notifyRef = useRef(notify);
   useEffect(() => { notifyRef.current = notify; }, [notify]);
+  const fetchSessionsRef = useRef(fetchSessions);
+  useEffect(() => { fetchSessionsRef.current = fetchSessions; }, [fetchSessions]);
 
   const handleClockInSuccess = useCallback(async (sessionId: number) => {
     setIsClockedIn(true);
@@ -356,10 +377,30 @@ export function UserDashboard() {
     onCountdownChange: stableOnCountdownChange,
   });
 
-  // ─── Manual clock-in (online only) ───────────────────────────────────────
+  // ─── Manual clock-in ─────────────────────────────────────────────────────
   const handleManualClockIn = async () => {
     if (!position) { notify('error', 'Location not available.'); return; }
     setActionLoading(true);
+
+    // ── Offline: queue to IndexedDB ──────────────────────────────────────────
+    if (!navigator.onLine) {
+      try {
+        await enqueueClockIn({
+          latitude:        position.latitude,
+          longitude:       position.longitude,
+          accuracy:        position.accuracy ?? 0,
+          clientTimestamp: new Date().toISOString(),
+        });
+        notify('warning', 'Offline — clock-in saved and will sync when back online.');
+        await refreshOfflineState();
+      } catch {
+        notify('error', 'Failed to save offline clock-in. Please try again.');
+      } finally {
+        setActionLoading(false);
+      }
+      return;
+    }
+
     try {
       // Gather diagnostics — mirrors useAutoClockIn's ensureDeviceRegistered / helpers
       const deviceId = await (async () => {
@@ -561,17 +602,19 @@ export function UserDashboard() {
       await flushOfflineQueue({
         onSynced: (count) => {
           notify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
-          fetchSessions();
+          refreshOfflineState();
+          fetchSessionsRef.current();
         },
         onFailed: (_evt, reason) => {
           notify('error', `An event was rejected: ${reason}`);
+          refreshOfflineState();
         },
       });
     } finally {
       await refreshOfflineState();
       setIsSyncing(false);
     }
-  }, [isSyncing, notify, fetchSessions, refreshOfflineState]);
+  }, [isSyncing, notify, refreshOfflineState]);
 
   // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -593,20 +636,32 @@ export function UserDashboard() {
 
   // ── Button disable logic (online + offline combined) ──────────────────────
   //
-  // clockIn disabled when:
-  //   - already clocked in                         (online)
-  //   - cooldown / session done                    (online)
-  //   - auto hasn't enabled manual + no geo error  (online)
+  // clockIn disabled when (ONLINE):
+  //   - already clocked in / cooldown / session done
+  //   - auto hasn't enabled manual + no geo error
   //   - an offline clock-in is already queued      (offline Flow 2)
   //   - both pending (pending_pair)                (offline Flow 3)
-  //   - action in flight                           (both)
-  const clockInDisabled =
-    isClockedIn ||
-    cooldownActive ||
-    sessionDoneForToday ||
-    (!manualClockInEnabled && !geoError) ||
-    offlineButtonState.disableClockIn ||
-    actionLoading;
+  //   - action in flight
+  // clockIn ENABLED when (OFFLINE):
+  //   - not clocked in + no clock-in queued yet    → let user queue it
+  // Offline + not yet clocked in (no queued clock-in either) → always unlock.
+  // This lets the user queue a clock-in for later sync regardless of GPS / auto state.
+  const offlineClockInUnlocked =
+    isOffline &&
+    !isClockedIn &&
+    !offlineButtonState.disableClockIn &&
+    !cooldownActive &&
+    !sessionDoneForToday &&
+    !actionLoading;
+
+  const clockInDisabled = offlineClockInUnlocked
+    ? false
+    : isClockedIn ||
+      cooldownActive ||
+      sessionDoneForToday ||
+      (!manualClockInEnabled && !geoError) ||
+      offlineButtonState.disableClockIn ||
+      actionLoading;
 
   // clockOut disabled when:
   //   - not clocked in AND no pending offline clock-in  (online)
