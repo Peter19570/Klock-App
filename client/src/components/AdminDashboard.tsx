@@ -640,6 +640,7 @@ export function AdminDashboard() {
 
   const { users: liveUsers } = useAdminWebSocket();
   const [visibleUserCount, setVisibleUserCount] = useState(0);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'overview',  label: 'Overview',  icon: <LayoutDashboard className="w-4 h-4" /> },
@@ -767,7 +768,7 @@ export function AdminDashboard() {
                 {activeTabDef.icon}
                 {activeTabDef.label}
               </div>
-              <Button variant="outline" size="icon" onClick={() => setMobileMenuOpen((v) => !v)}>
+              <Button ref={mobileMenuButtonRef} variant="outline" size="icon" onClick={() => setMobileMenuOpen((v) => !v)}>
                 <svg className="pointer-events-none" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 12L20 12" className={`origin-center transition-all duration-300 ${mobileMenuOpen ? 'translate-y-0 rotate-[315deg]' : '-translate-y-[7px]'}`} />
                   <path d="M4 12H20" className={`origin-center transition-all duration-300 ${mobileMenuOpen ? 'rotate-45' : ''}`} />
@@ -775,33 +776,49 @@ export function AdminDashboard() {
                 </svg>
               </Button>
             </div>
-            <AnimatePresence>
-              {mobileMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                  transition={{ duration: 0.18 }}
-                  className="mt-2 rounded-xl border border-border bg-card shadow-lg overflow-hidden"
-                >
-                  {TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => handleTabChange(tab.id)}
-                      className={`flex items-center gap-2.5 w-full px-4 py-3 text-sm transition-colors
-                        ${activeTab === tab.id
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-                        }`}
-                    >
-                      {tab.icon}
-                      {tab.label}
-                      {activeTab === tab.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {mobileMenuOpen && ReactDOM.createPortal(
+              <>
+                {/* Backdrop — captures outside clicks, does NOT push layout */}
+                <div
+                  className="fixed inset-0 z-[45]"
+                  onClick={() => setMobileMenuOpen(false)}
+                />
+                {/* Dropdown — positioned relative to the button via fixed coords */}
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                    transition={{ duration: 0.18 }}
+                    style={{
+                      position: 'fixed',
+                      top: (mobileMenuButtonRef.current?.getBoundingClientRect().bottom ?? 0) + 8,
+                      left: 16,
+                      right: 16,
+                      zIndex: 46,
+                    }}
+                    className="rounded-xl border border-border bg-card shadow-lg overflow-hidden"
+                  >
+                    {TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleTabChange(tab.id)}
+                        className={`flex items-center gap-2.5 w-full px-4 py-3 text-sm transition-colors
+                          ${activeTab === tab.id
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                          }`}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        {activeTab === tab.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                      </button>
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+              </>,
+              document.body,
+            )}
           </div>
         </div>
 
