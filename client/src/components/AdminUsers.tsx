@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/services/api';
 import { transferUser } from '@/services/userService';
 import { getLocationHistory } from '@/services/sessionService';
-import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse, LocationResponse } from '@/types';
+import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse, LocationResponse, UserRole } from '@/types';
 import UserSessionsPage from './UserSessionsPage';
 import UserLogsPage from '../pages/UserLogsPage';
 
@@ -33,9 +33,10 @@ interface AdminUsersProps {
   onCreateUser?: () => void;
 }
 
+
 // ─── Role Pill ────────────────────────────────────────────────────────────────
 
-function RolePill({ role }: { role: import('@/types').UserRole }) {
+function RolePill({ role }: { role: UserRole }) {
   if (role === 'SUPER_ADMIN') {
     return (
       <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-500 border border-amber-400/30 shrink-0">
@@ -50,7 +51,6 @@ function RolePill({ role }: { role: import('@/types').UserRole }) {
       </span>
     );
   }
-  // USER → Employee
   return (
     <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border shrink-0">
       Employee
@@ -777,21 +777,23 @@ export default function AdminUsers({
                     </div>
                   </button>
 
-                  {/* Desktop: branch + role — sits between text and actions */}
+                  {/* Desktop: info + actions — info sits flush right, nudges left on hover to reveal action buttons */}
                   <div className="hidden sm:flex items-center gap-2 shrink-0">
-                    {user.homeBranchName && (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70 max-w-[160px] truncate">
-                        📍 {user.homeBranchName}
-                      </span>
-                    )}
-                    {user.role && <RolePill role={user.role} />}
-                  </div>
+                    {/* Info chips — always visible, shift left on hover */}
+                    <div className="flex items-center gap-2 transition-all duration-200 ease-out group-hover:mr-1 group-focus-within:mr-1">
+                      {user.homeBranchName && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70 max-w-[140px] truncate">
+                          📍 {user.homeBranchName}
+                        </span>
+                      )}
+                      {user.role && <RolePill role={user.role} />}
+                    </div>
 
-                  {/* Actions — revealed on hover */}
-                  <div
-                    className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                    {/* Action buttons — zero width when hidden, expand in on hover */}
+                    <div
+                      className="flex items-center gap-1 overflow-hidden w-0 group-hover:w-auto group-focus-within:w-auto transition-all duration-200 ease-out"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                     {isSuperAdmin && branches.length > 0 && (
                       <Button
                         size="icon"
@@ -821,7 +823,8 @@ export default function AdminUsers({
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                  </div>
+                    </div>{/* end action buttons */}
+                  </div>{/* end info+actions wrapper */}
                 </motion.div>
               );
             })}

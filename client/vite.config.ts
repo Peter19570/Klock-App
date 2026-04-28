@@ -20,7 +20,7 @@ export default defineConfig({
     port: 5173,
     allowedHosts: [
       'sandier-unpsychically-rickie.ngrok-free.dev'
-    ]
+    ],
   },
   build: {
   outDir: '../src/main/resources/static',

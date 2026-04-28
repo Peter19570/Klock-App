@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
 import { exportSessions } from "@/services/sessionService";
 import { getAdminSessions } from "@/services/sessionService";
-import type { SessionResponse, ClockEventResponse, AdminSessionResponse } from "@/types";
+import type { SessionResponse, ClockEventResponse, AdminSessionResponse, BranchResponse } from "@/types";
 
 type ArrivalStatus = "EARLY" | "ON_TIME" | "LATE" | "";
 type SessionStatus = "ACTIVE" | "COMPLETED" | "";
@@ -21,7 +21,7 @@ interface SessionFilterState {
   maxDate: string;
   arrivalStatus: ArrivalStatus;
   sessionStatus: SessionStatus;
-  branchName: string;
+  branchId: number | '';
 }
 
 function formatDate(dateStr: string) {
@@ -68,12 +68,7 @@ function ArrivalBadge({ status }: { status?: "EARLY" | "ON_TIME" | "LATE" | null
 
 // ─── Filter Modal ──────────────────────────────────────────────────────────────
 
-interface SessionFilterState {
-  minDate: string;
-  maxDate: string;
-  arrivalStatus: ArrivalStatus;
-  sessionStatus: SessionStatus;
-}
+// SessionFilterState defined above
 
 interface SessionFilterModalProps {
   open: boolean;
@@ -81,6 +76,7 @@ interface SessionFilterModalProps {
   filters: SessionFilterState;
   onApply: (f: SessionFilterState) => void;
   onClear: () => void;
+  branches?: BranchResponse[];
 }
 
 const ARRIVAL_OPTIONS: { value: ArrivalStatus; label: string }[] = [
@@ -96,7 +92,7 @@ const STATUS_OPTIONS: { value: SessionStatus; label: string }[] = [
   { value: "COMPLETED", label: "Completed" },
 ];
 
-function SessionFilterModal({ open, onClose, filters, onApply, onClear }: SessionFilterModalProps) {
+function SessionFilterModal({ open, onClose, filters, onApply, onClear, branches = [] }: SessionFilterModalProps) {
   const [local, setLocal] = React.useState<SessionFilterState>(filters);
 
   React.useEffect(() => {
@@ -108,7 +104,7 @@ function SessionFilterModal({ open, onClose, filters, onApply, onClear }: Sessio
 
   const handleApply = () => { onApply(local); onClose(); };
   const handleClear = () => {
-    const empty: SessionFilterState = { minDate: "", maxDate: "", arrivalStatus: "", sessionStatus: "" };
+    const empty: SessionFilterState = { minDate: "", maxDate: "", arrivalStatus: "", sessionStatus: "", branchId: "" };
     setLocal(empty);
     onClear();
     onClose();
@@ -162,19 +158,43 @@ function SessionFilterModal({ open, onClose, filters, onApply, onClear }: Sessio
                 />
               </div>
 
-              {/* Branch name search */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" /> Branch
-                </Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Warehouse A"
-                  value={local.branchName}
-                  onChange={(e) => set("branchName", e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
+              {/* Branch picker — client-side filter */}
+              {branches.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" /> Branch
+                  </Label>
+                  <div className="flex flex-col gap-1 max-h-36 overflow-y-auto rounded-lg border border-border bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => set("branchId", "")}
+                      className={`flex items-center justify-between w-full px-3 py-2 rounded-md text-sm transition-colors text-left ${
+                        local.branchId === ""
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-foreground hover:bg-muted/60"
+                      }`}
+                    >
+                      <span>All branches</span>
+                      {local.branchId === "" && <ChevronDown className="h-3.5 w-3.5 text-primary shrink-0 rotate-[-90deg]" />}
+                    </button>
+                    {branches.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => set("branchId", b.id)}
+                        className={`flex items-center justify-between w-full px-3 py-2 rounded-md text-sm transition-colors text-left ${
+                          local.branchId === b.id
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-foreground hover:bg-muted/60"
+                        }`}
+                      >
+                        <span className="truncate">{b.displayName}</span>
+                        {local.branchId === b.id && <ChevronDown className="h-3.5 w-3.5 text-primary shrink-0 rotate-[-90deg]" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Arrival status */}
               <div className="space-y-1.5">
@@ -640,10 +660,14 @@ const EMPTY_FILTERS: SessionFilterState = {
   maxDate: "",
   arrivalStatus: "",
   sessionStatus: "",
-  branchName: "",
+  branchId: "",
 };
 
-export default function AdminSessions() {
+interface AdminSessionsProps {
+  branches?: BranchResponse[];
+}
+
+export default function AdminSessions({ branches = [] }: AdminSessionsProps) {
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
   const [totalPages, setTotalPages]   = React.useState(0);
   const [currentPage, setCurrentPage] = React.useState(0);
@@ -699,7 +723,7 @@ export default function AdminSessions() {
     filters.maxDate !== "",
     filters.arrivalStatus !== "",
     filters.sessionStatus !== "",
-    filters.branchName !== "",
+    filters.branchId !== "",
   ].filter(Boolean).length;
 
   const removeChip = (key: keyof SessionFilterState) =>
@@ -807,11 +831,11 @@ export default function AdminSessions() {
                 </button>
               </span>
             )}
-            {filters.branchName && (
+            {filters.branchId !== "" && (
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
                 <MapPin className="h-3 w-3" />
-                {filters.branchName}
-                <button onClick={() => removeChip("branchName")} className="text-muted-foreground hover:text-foreground ml-0.5">
+                {branches.find(b => b.id === filters.branchId)?.displayName ?? "Branch"}
+                <button onClick={() => removeChip("branchId")} className="text-muted-foreground hover:text-foreground ml-0.5">
                   <X className="h-3 w-3" />
                 </button>
               </span>
@@ -829,11 +853,12 @@ export default function AdminSessions() {
           No sessions found.
         </div>
       ) : (() => {
-        // Client-side branch filter (branchName is not a backend param — filter by movement branchName)
-        const filtered = filters.branchName
+        // Client-side branch filter — match selected branchId's displayName against movement branchName
+        const selectedBranchName = branches.find(b => b.id === filters.branchId)?.displayName;
+        const filtered = selectedBranchName
           ? sessions.filter((s) =>
               s.movements.some((m) =>
-                m.branchName?.toLowerCase().includes(filters.branchName.toLowerCase())
+                m.branchName?.toLowerCase() === selectedBranchName.toLowerCase()
               )
             )
           : sessions;
@@ -846,7 +871,7 @@ export default function AdminSessions() {
               ))}
               {filtered.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-xl">
-                  No sessions match branch "{filters.branchName}".
+                  No sessions match the selected branch.
                 </div>
               )}
             </div>
@@ -875,6 +900,7 @@ export default function AdminSessions() {
         filters={filters}
         onApply={setFilters}
         onClear={() => setFilters(EMPTY_FILTERS)}
+        branches={branches}
       />
 
       <ExportModal

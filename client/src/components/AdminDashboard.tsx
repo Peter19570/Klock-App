@@ -888,7 +888,7 @@ export function AdminDashboard() {
             )}
 
             {/* ── SESSIONS */}
-            {activeTab === 'sessions' && <AdminSessions />}
+            {activeTab === 'sessions' && <AdminSessions branches={branches} />}
 
             {/* ── LOGS */}
             {activeTab === 'logs' && <AuditLogsPage />}
@@ -998,39 +998,42 @@ export function AdminDashboard() {
                                 </p>
                               </button>
 
-                              {/* Desktop: status badge — sits between text and actions */}
-                              <div className="hidden sm:flex shrink-0">
-                                {b.branchStatus === 'LOCKED' ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30">
-                                    <Lock className="h-2.5 w-2.5" /> Locked
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30">
-                                    <Unlock className="h-2.5 w-2.5" /> Unlocked
-                                  </span>
-                                )}
-                              </div>
+                              {/* Desktop: status badge + actions — badge sits flush right, shifts left on hover to reveal buttons */}
+                              <div className="hidden sm:flex items-center gap-2 shrink-0">
+                                {/* Status badge — always visible */}
+                                <div className="flex items-center transition-all duration-200 ease-out group-hover:mr-1 group-focus-within:mr-1">
+                                  {b.branchStatus === 'LOCKED' ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-500 font-medium border border-amber-400/30">
+                                      <Lock className="h-2.5 w-2.5" /> Locked
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-500 font-medium border border-emerald-400/30">
+                                      <Unlock className="h-2.5 w-2.5" /> Unlocked
+                                    </span>
+                                  )}
+                                </div>
 
-                              {/* Actions */}
-                              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 rounded-full"
-                                  onClick={() => setSelectedBranch(b)}
-                                  title="View branch"
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
-                                  onClick={() => setDeletingBranchId(b.id)}
-                                  title="Delete branch"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {/* Action buttons — zero width when hidden, expand on hover */}
+                                <div className="flex items-center gap-1 overflow-hidden w-0 group-hover:w-auto group-focus-within:w-auto transition-all duration-200 ease-out">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 rounded-full"
+                                    onClick={() => setSelectedBranch(b)}
+                                    title="View branch"
+                                  >
+                                    <ChevronRight className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
+                                    onClick={() => setDeletingBranchId(b.id)}
+                                    title="Delete branch"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
 
                               {/* Delete confirm overlay */}
