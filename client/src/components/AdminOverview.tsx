@@ -211,7 +211,7 @@ function ClockOutBreakdown({ manual, automatic, loading }: { manual: number; aut
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Clock-out Method</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Auto vs manual — last 7 days</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Auto vs manual — Today</p>
         </div>
         <CheckCircle2 className="h-4 w-4 text-primary" />
       </div>
@@ -222,7 +222,7 @@ function ClockOutBreakdown({ manual, automatic, loading }: { manual: number; aut
         </div>
       ) : total === 0 ? (
         <div className="flex items-center justify-center h-28 text-sm text-muted-foreground">
-          No sessions this week
+          No sessions today
         </div>
       ) : (
         <div className="flex items-center gap-6">

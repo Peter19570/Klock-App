@@ -35,10 +35,10 @@ public class ClockEvent extends BaseEntity {
     private Boolean isDelaySync = false;
 
     @Column
-    private Double siteDepartureDistance; // difference (in meters) btw clock out and clock in distance
+    private Double siteDepartureDistance; // difference (in meters) btw clock out and clock-in distance
 
     @Column
-    private Double entryProximityDistance; // distance (in meters) user is close to the branch location
+    private Double entryProximityDistance; // how close to the branch the user clocked-in
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
