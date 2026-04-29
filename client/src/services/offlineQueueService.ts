@@ -305,18 +305,33 @@ export async function incrementRetry(eventId: string): Promise<number> {
 }
 
 /**
- * Mark event as synced. deleteEvent() is always called right after this
- * in syncEngine, so we just stamp the status — no need to update the session.
+ * Mark event as synced and immediately delete both the event and its parent
+ * session in a single atomic transaction.
+ *
+ * Previously this only stamped status: 'synced' and relied on syncEngine to
+ * call deleteEvent() afterwards. If anything threw between those two calls the
+ * session record was left behind with status 'pending_in' / 'pending_pair',
+ * keeping the offline banners and button-disable logic stuck forever.
+ * Doing it all in one transaction eliminates that race entirely.
  */
 export async function markEventSynced(
   eventId: string,
-  serverTimestamp: string,
+  _serverTimestamp: string,
 ): Promise<void> {
   const db  = await openDB();
   const evt = await txGet<PendingEvent>(db, STORE_EVENTS, eventId);
   if (!evt) return;
-  await txPut(db, STORE_EVENTS, { ...evt, status: 'synced', serverTimestamp });
-  // deleteEvent() will remove both the event and session record immediately after
+
+  // Delete event + session atomically — no intermediate 'synced' state needed
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([STORE_EVENTS, STORE_SESSIONS], 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+    tx.objectStore(STORE_EVENTS).delete(eventId);
+    tx.objectStore(STORE_SESSIONS).delete(evt.sessionId);
+  });
+
+  dispatchQueueUpdate();
 }
 
 /**
@@ -427,16 +442,18 @@ export async function getOpenOfflineSession(): Promise<OfflineSession | null> {
 }
 
 /**
- * Permanently remove a synced event from IDB.
- * Always removes the parent session record too — once an event is synced
- * the server owns the session, no need to track it locally anymore.
+ * Permanently remove an event from IDB, also removing its parent session.
+ * Always called by syncEngine after markEventSynced — but since markEventSynced
+ * now deletes both records atomically, this is a safe no-op if they're already
+ * gone. It still handles the case where deleteEvent is called directly (e.g.
+ * manual purge) without a prior markEventSynced.
  */
 export async function deleteEvent(eventId: string): Promise<void> {
   const db  = await openDB();
   const evt = await txGet<PendingEvent>(db, STORE_EVENTS, eventId);
+  // Already deleted by markEventSynced — nothing to do
   if (!evt) return;
 
-  // Delete event + session atomically in one transaction
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction([STORE_EVENTS, STORE_SESSIONS], 'readwrite');
     tx.oncomplete = () => resolve();

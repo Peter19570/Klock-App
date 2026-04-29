@@ -30,14 +30,11 @@ import {
 } from '../services/sessionService';
 import { getAllBranches, getBranchDetails }  from '../services/branchService';
 import {
-  getPendingCount,
-  getOfflineButtonState,
-  getOpenOfflineSession,
-  enqueueClockIn,
-  enqueueClockOut,
-  runExpiryCleanup,
-} from '../services/offlineQueueService';
-import { flushOfflineQueue, startSyncScheduler } from '../services/syncEngine';
+  savePendingClockIn,
+  getPendingClockIn,
+  clearPendingClockIn,
+  hasPendingClockIn,
+} from '../services/offlineClockQueue';
 import type { SessionResponse, BranchResponse } from '../types';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,18 +87,8 @@ export function UserDashboard() {
 
   // ─── Offline state ───────────────────────────────────────────────────────
   const [isOffline, setIsOffline]               = useState(() => !navigator.onLine);
-  const [isSyncing, setIsSyncing]               = useState(false);
-
-  // Pending counts — sourced from IndexedDB via async getPendingCount()
-  const [pendingCount, setPendingCount]         = useState(0);
-  // Full button state from IndexedDB (for disabling buttons correctly offline)
-  const [offlineButtonState, setOfflineButtonState] = useState({
-    disableClockIn:       false,
-    disableClockOut:      true,
-    pendingClockInCount:  0,
-    pendingClockOutCount: 0,
-    hasPendingPair:       false,
-  });
+  // Synchronous localStorage check — no async, no race conditions
+  const [hasPending, setHasPending]             = useState(() => hasPendingClockIn());
 
   // ─── Refs ────────────────────────────────────────────────────────────────
   const reClockInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,41 +111,41 @@ export function UserDashboard() {
     [],
   );
 
-  // ─── Refresh offline state from IndexedDB ────────────────────────────────
-  const refreshOfflineState = useCallback(async () => {
-    try {
-      const [count, btnState] = await Promise.all([
-        getPendingCount(),
-        getOfflineButtonState(),
-      ]);
-      setPendingCount(count);
-      setOfflineButtonState(btnState);
-    } catch {
-      // IDB unavailable — leave as is
-    }
+  // ─── Refresh offline state from localStorage (synchronous) ──────────────
+  const refreshOfflineState = useCallback(() => {
+    setHasPending(hasPendingClockIn());
   }, []);
 
-  // ─── Online / offline tracking ───────────────────────────────────────────
+  // ─── Online / offline tracking + pending clock-in sync ──────────────────
   useEffect(() => {
     const handleOnline = async () => {
       setIsOffline(false);
-      refreshOfflineState();
-      // Re-check server active status on reconnect — but only if no offline
-      // events are queued, to avoid racing with the sync flush.
-      try {
-        const pending = await getPendingCount();
-        if (pending === 0) {
+      const pending = getPendingClockIn();
+      if (pending) {
+        // There's a queued offline clock-in — send it now, skip auto clock-in
+        try {
+          const res = await clockIn(pending); // payload is already complete
+          clearPendingClockIn();
+          setHasPending(false);
+          notify('success', 'Offline clock-in synced successfully.');
+          await handleClockInSuccessRef.current(res.data.data.id);
+        } catch {
+          notify('error', 'Failed to sync offline clock-in. Will retry on next reconnect.');
+        }
+      } else {
+        // No pending — normal server reconcile
+        try {
           const activeStatus = await isActive();
           setIsClockedIn(activeStatus);
           if (activeStatus) {
-            await fetchActiveBranch();
+            await fetchActiveBranchRef.current();
           } else {
             setActiveBranchName(null);
           }
-        }
-      } catch { /* silent — sync will reconcile */ }
+        } catch { /* silent */ }
+      }
     };
-    const handleOffline = () => { setIsOffline(true); refreshOfflineState(); };
+    const handleOffline = () => setIsOffline(true);
     window.addEventListener('online',  handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -166,79 +153,15 @@ export function UserDashboard() {
       window.removeEventListener('offline', handleOffline);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshOfflineState]);
+  }, []);
 
-  // Listen for IDB queue updates (dispatched by offlineQueueService)
+  // ─── Cross-tab sync: if another tab clears the pending key, update state ──
   useEffect(() => {
-    const refresh = () => refreshOfflineState();
-    window.addEventListener('klock:queue-updated', refresh);
-    window.addEventListener('storage', refresh); // cross-tab
-    return () => {
-      window.removeEventListener('klock:queue-updated', refresh);
-      window.removeEventListener('storage', refresh);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'klock_pending_clockin') setHasPending(hasPendingClockIn());
     };
-  }, [refreshOfflineState]);
-
-  // ─── Page-load: reconstruct button state from IDB (Flow 7) ───────────────
-  useEffect(() => {
-    refreshOfflineState();
-  }, [refreshOfflineState]);
-
-  // ─── Expiry cleanup on mount (Flow 6) ────────────────────────────────────
-  useEffect(() => {
-    runExpiryCleanup().then((expired) => {
-      if (expired > 0) {
-        notify(
-          'warning',
-          `${expired} offline clock event${expired !== 1 ? 's' : ''} expired without syncing.`,
-        );
-        refreshOfflineState();
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ─── Start background sync scheduler ─────────────────────────────────────
-  useEffect(() => {
-    const stop = startSyncScheduler({
-      onSynced: (count) => {
-        notify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
-        refreshOfflineState();
-        fetchSessionsRef.current();
-        setIsSyncing(false);
-      },
-      onFailed: (_evt, reason) => {
-        notify('error', `An offline event failed to sync: ${reason}`);
-        refreshOfflineState();
-        setIsSyncing(false);
-      },
-    });
-    return stop;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ─── Auto-flush on mount if online + pending events exist ────────────────
-  useEffect(() => {
-    if (!navigator.onLine) return;
-    getPendingCount().then((count) => {
-      if (count === 0) return;
-      setIsSyncing(true);
-      flushOfflineQueue({
-        onSynced: (n) => {
-          notify('success', `Synced ${n} offline clock event${n !== 1 ? 's' : ''}.`);
-          refreshOfflineState();
-          fetchSessionsRef.current();
-        },
-        onFailed: (_evt, reason) => {
-          notify('error', `An offline event failed to sync: ${reason}`);
-          refreshOfflineState();
-        },
-      }).finally(() => {
-        refreshOfflineState();
-        setIsSyncing(false);
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   // ─── Data fetchers ───────────────────────────────────────────────────────
@@ -344,6 +267,8 @@ export function UserDashboard() {
   useEffect(() => { notifyRef.current = notify; }, [notify]);
   const fetchSessionsRef = useRef(fetchSessions);
   useEffect(() => { fetchSessionsRef.current = fetchSessions; }, [fetchSessions]);
+  const fetchActiveBranchRef = useRef(fetchActiveBranch);
+  useEffect(() => { fetchActiveBranchRef.current = fetchActiveBranch; }, [fetchActiveBranch]);
 
   const handleClockInSuccess = useCallback(async (sessionId: number) => {
     setIsClockedIn(true);
@@ -408,22 +333,31 @@ export function UserDashboard() {
     if (!position) { notify('error', 'Location not available.'); return; }
     setActionLoading(true);
 
-    // ── Offline: queue to IndexedDB ──────────────────────────────────────────
+    // ── Offline: save full payload to localStorage — sync on reconnect ────
     if (!navigator.onLine) {
+      const now = new Date();
+      // Battery API reads from device hardware — works offline
+      let batteryLevel: number | undefined;
       try {
-        await enqueueClockIn({
-          latitude:        position.latitude,
-          longitude:       position.longitude,
-          accuracy:        position.accuracy ?? 0,
-          clientTimestamp: new Date().toISOString(),
-        });
-        notify('warning', 'Offline — clock-in saved and will sync when back online.');
-        await refreshOfflineState();
-      } catch {
-        notify('error', 'Failed to save offline clock-in. Please try again.');
-      } finally {
-        setActionLoading(false);
-      }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nav = navigator as any;
+        if (typeof nav.getBattery === 'function') {
+          const bat = await nav.getBattery();
+          batteryLevel = Math.round(bat.level * 100);
+        }
+      } catch { /* unavailable on this device */ }
+      savePendingClockIn({
+        latitude:        position.latitude,
+        longitude:       position.longitude,
+        accuracy:        position.accuracy ?? 0,
+        isDelaySync:     true,
+        deviceId:        localStorage.getItem('klock_device_id') ?? undefined,
+        batteryLevel,
+        clientTimeStamp: now.toTimeString().slice(0, 8), // HH:mm:ss for Java LocalTime
+      });
+      setHasPending(true);
+      notify('warning', 'Offline — clock-in saved and will sync when back online.');
+      setActionLoading(false);
       return;
     }
 
@@ -494,25 +428,19 @@ export function UserDashboard() {
     setActionLoading(true);
 
     try {
-      // ── Offline: queue to IndexedDB ────────────────────────────────────
+      // ── Offline clock-out ────────────────────────────────────────────────
+      // If there's a pending (unsynced) clock-in, the user never truly clocked
+      // in on the server — cancel the pending clock-in instead.
       if (!navigator.onLine) {
-        const openSession = await getOpenOfflineSession();
-        if (openSession) {
-          await enqueueClockOut({
-            sessionId:       openSession.sessionId,
-            latitude:        position.latitude,
-            longitude:       position.longitude,
-            accuracy:        position.accuracy ?? 0,
-            clientTimestamp: new Date().toISOString(),
-            clockOutType:    'MANUAL',
-          });
-          notify('warning', 'Offline — clock-out saved and will sync when back online.');
-          setSessionDoneForToday(true);
-          await handleClockOutSuccess();
-          refreshOfflineState();
-        } else {
-          notify('error', 'No active session to clock out of while offline.');
+        if (hasPendingClockIn()) {
+          clearPendingClockIn();
+          setHasPending(false);
+          notify('warning', 'Offline — pending clock-in cancelled.');
+          setActionLoading(false);
+          return;
         }
+        // Was clocked in online but went offline — can't clock out without server
+        notify('error', 'Cannot clock out while offline. Please reconnect and try again.');
         setActionLoading(false);
         return;
       }
@@ -620,27 +548,21 @@ export function UserDashboard() {
     if (reClockInTimerRef.current) clearTimeout(reClockInTimerRef.current);
   }, []);
 
-  // ─── Manual sync ("Sync Now" button) ─────────────────────────────────────
+  // ─── Manual sync — retry if the online handler failed ───────────────────
   const handleManualFlush = useCallback(async () => {
-    if (isSyncing || !navigator.onLine) return;
-    setIsSyncing(true);
+    if (!navigator.onLine) return;
+    const pending = getPendingClockIn();
+    if (!pending) return;
     try {
-      await flushOfflineQueue({
-        onSynced: (count) => {
-          notify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
-          refreshOfflineState();
-          fetchSessionsRef.current();
-        },
-        onFailed: (_evt, reason) => {
-          notify('error', `An event was rejected: ${reason}`);
-          refreshOfflineState();
-        },
-      });
-    } finally {
-      await refreshOfflineState();
-      setIsSyncing(false);
+      const res = await clockIn(pending); // payload is already complete
+      clearPendingClockIn();
+      setHasPending(false);
+      notify('success', 'Offline clock-in synced successfully.');
+      await handleClockInSuccessRef.current(res.data.data.id);
+    } catch {
+      notify('error', 'Sync failed. Will retry automatically.');
     }
-  }, [isSyncing, notify, refreshOfflineState]);
+  }, [notify]);
 
   // ─── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -660,55 +582,31 @@ export function UserDashboard() {
     ? Math.min(...branches.map((b) => b.radius))
     : 0;
 
-  // ── Button disable logic (online + offline combined) ──────────────────────
-  //
-  // clockIn disabled when (ONLINE):
-  //   - already clocked in / cooldown / session done
-  //   - auto hasn't enabled manual + no geo error
-  //   - an offline clock-in is already queued      (offline Flow 2)
-  //   - both pending (pending_pair)                (offline Flow 3)
-  //   - action in flight
-  // clockIn ENABLED when (OFFLINE):
-  //   - not clocked in + no clock-in queued yet    → let user queue it
-  // Offline + not yet clocked in (no queued clock-in either) → always unlock.
-  // This lets the user queue a clock-in for later sync regardless of GPS / auto state.
+  // ── Button disable logic ─────────────────────────────────────────────────
+  // clockIn enabled when offline + not clocked in + no pending queued yet
   const offlineClockInUnlocked =
-    isOffline &&
-    !isClockedIn &&
-    !offlineButtonState.disableClockIn &&
-    !cooldownActive &&
-    !sessionDoneForToday &&
-    !actionLoading;
+    isOffline && !isClockedIn && !hasPending && !cooldownActive && !sessionDoneForToday && !actionLoading;
 
   const clockInDisabled = offlineClockInUnlocked
     ? false
     : isClockedIn ||
       cooldownActive ||
       sessionDoneForToday ||
+      hasPending ||
       (!manualClockInEnabled && !geoError) ||
-      offlineButtonState.disableClockIn ||
       actionLoading;
 
-  // clockOut disabled when:
-  //   - not clocked in AND no pending offline clock-in  (online)
-  //   - session done for today                          (online)
-  //   - pending_pair already queued                     (offline Flow 3)
-  //   - no pending_in to attach clock-out to (offline)  (offline)
-  //   - action in flight                                (both)
   const clockOutDisabled =
-    (!isClockedIn && !offlineButtonState.pendingClockInCount) ||
+    (!isClockedIn && !hasPending) ||
     sessionDoneForToday ||
-    offlineButtonState.hasPendingPair ||
     actionLoading;
 
   const statusLabel = isClockedIn
     ? 'You are currently clocked in.'
     : sessionDoneForToday
     ? 'Session complete for today.'
-    : offlineButtonState.hasPendingPair
-    ? 'Clock events saved offline — will sync when back online.'
-    : offlineButtonState.pendingClockInCount > 0
-    ? 'Clock-in saved offline — you can clock out when ready.'
+    : hasPending
+    ? 'Clock-in saved offline — will sync when back online.'
     : 'You are not clocked in.';
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -767,7 +665,7 @@ export function UserDashboard() {
 
       {/* ── Pending sync banner ────────────────────────────────────────────── */}
       <AnimatePresence>
-        {pendingCount > 0 && (
+        {hasPending && (
           <motion.div
             key="offline-banner"
             initial={{ opacity: 0, y: -10 }}
@@ -778,17 +676,15 @@ export function UserDashboard() {
             <WifiOff className="w-4 h-4 shrink-0 text-amber-500" />
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-amber-600 dark:text-amber-400">
-                {pendingCount} clock event{pendingCount !== 1 ? 's' : ''} pending sync
+                Clock-in pending sync
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {isSyncing
-                  ? 'Syncing…'
-                  : navigator.onLine
-                  ? 'Syncing automatically…'
-                  : 'Offline — will sync automatically when back online.'}
+                {isOffline
+                  ? 'Offline — will sync automatically when back online.'
+                  : 'Syncing…'}
               </p>
             </div>
-            {isSyncing && (
+            {!isOffline && (
               <RefreshCw className="w-4 h-4 shrink-0 text-amber-500 animate-spin" />
             )}
           </motion.div>
@@ -806,7 +702,7 @@ export function UserDashboard() {
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   isClockedIn
                     ? 'bg-emerald-500 animate-pulse'
-                    : offlineButtonState.pendingClockInCount > 0
+                    : hasPending
                     ? 'bg-amber-400 animate-pulse'
                     : 'bg-muted-foreground'
                 }`}
@@ -826,7 +722,7 @@ export function UserDashboard() {
                   {activeBranchName}
                 </motion.div>
               )}
-              {!isClockedIn && offlineButtonState.pendingClockInCount > 0 && !offlineButtonState.hasPendingPair && (
+              {!isClockedIn && hasPending && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -835,17 +731,6 @@ export function UserDashboard() {
                 >
                   <WifiOff className="w-3 h-3 shrink-0" />
                   Clock-in pending sync
-                </motion.div>
-              )}
-              {offlineButtonState.hasPendingPair && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 shrink-0"
-                >
-                  <WifiOff className="w-3 h-3 shrink-0" />
-                  Session pending sync
                 </motion.div>
               )}
             </AnimatePresence>
@@ -913,7 +798,7 @@ export function UserDashboard() {
 
           <AnimatePresence mode="wait">
             {/* Session done online */}
-            {sessionDoneForToday && !cooldownActive && countdownSeconds === null && !offlineButtonState.hasPendingPair && (
+            {sessionDoneForToday && !cooldownActive && countdownSeconds === null && !hasPending && (
               <motion.p
                 key="done"
                 initial={{ opacity: 0 }}
@@ -932,15 +817,13 @@ export function UserDashboard() {
               <p className={`text-sm font-semibold mt-0.5 ${
                 isClockedIn
                   ? 'text-emerald-500'
-                  : offlineButtonState.pendingClockInCount > 0
+                  : hasPending
                   ? 'text-amber-500'
                   : 'text-muted-foreground'
               }`}>
                 {isClockedIn
                   ? 'Clocked In'
-                  : offlineButtonState.hasPendingPair
-                  ? 'Pending Sync'
-                  : offlineButtonState.pendingClockInCount > 0
+                  : hasPending
                   ? 'Clocked In (Offline)'
                   : 'Clocked Out'}
               </p>

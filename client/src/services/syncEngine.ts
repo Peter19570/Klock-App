@@ -23,7 +23,6 @@
 import { clockIn, clockOut } from './sessionService';
 import {
   getPendingEvents,
-  deleteEvent,
   markEventSynced,
   markEventFailed,
   incrementRetry,
@@ -92,8 +91,12 @@ async function syncEvent(event: PendingEvent): Promise<'synced' | 'failed' | 'sk
         clientTimeStamp,
       });
       const serverTs = res.data?.data?.clockInTime ?? new Date().toISOString();
+      // markEventSynced now atomically deletes both the event + session records
+      // and fires dispatchQueueUpdate() — do NOT call deleteEvent() after this.
+      // The old code called deleteEvent() right after, but since markEventSynced
+      // already deleted the record, deleteEvent() hit the early-return guard and
+      // never called dispatchQueueUpdate(), so the UI banners never cleared.
       await markEventSynced(event.id, serverTs);
-      await deleteEvent(event.id);
       return 'synced';
     }
 
@@ -106,8 +109,8 @@ async function syncEvent(event: PendingEvent): Promise<'synced' | 'failed' | 'sk
         isDelaySync:  true,
       });
       const serverTs = res.data?.data?.clockOutTime ?? new Date().toISOString();
+      // same — markEventSynced handles full cleanup + dispatch
       await markEventSynced(event.id, serverTs);
-      await deleteEvent(event.id);
       return 'synced';
     }
 
@@ -159,12 +162,14 @@ export async function flushOfflineQueue(
     for (let i = 0; i < events.length; i++) {
       callbacks?.onProgress?.(i + 1, total);
       const outcome = await syncEvent(events[i]);
-      if (outcome === 'synced')  result.synced++;
-      if (outcome === 'failed')  {
+      if (outcome === 'synced') {
+        result.synced++;
+      } else if (outcome === 'failed') {
         result.failed++;
         callbacks?.onFailed?.(events[i], events[i].failReason ?? 'Unknown error');
+      } else if (outcome === 'skipped') {
+        result.skipped++;
       }
-      if (outcome === 'skipped') result.skipped++;
     }
 
     if (result.synced > 0) {
@@ -195,9 +200,15 @@ export function startSyncScheduler(callbacks?: SyncCallbacks): () => void {
 
   _retryInterval = setInterval(tick, 30_000);
 
-  // Also flush immediately on online recovery
+  // Flush immediately on online recovery
   const handleOnline = () => flushOfflineQueue(callbacks);
   window.addEventListener('online', handleOnline);
+
+  // Flush immediately on mount if already online — covers the page-load case
+  // where the user comes back online before the first 30s tick fires.
+  if (navigator.onLine) {
+    flushOfflineQueue(callbacks);
+  }
 
   return () => {
     if (_retryInterval) clearInterval(_retryInterval);

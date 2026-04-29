@@ -14,8 +14,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { haversineDistance } from '../lib/utils';
 import { clockIn, getActiveMovement, getTodaySession } from '../services/sessionService';
 import { getMe } from '../services/userService';
-import { enqueueClockIn, getOpenOfflineSession } from '../services/offlineQueueService';
-import { flushOfflineQueue } from '../services/syncEngine';
+import { savePendingClockIn } from '../services/offlineClockQueue';
 import api from '../services/api';
 import type { GeoPosition, ClockInRequest } from '../types';
 
@@ -116,34 +115,11 @@ export function useAutoClockIn({
     prevClockedInRef.current = isClockedIn;
   }, [isClockedIn]);
 
-  // ─── Flush offline queue on connectivity restore ───────────────────────────
-  useEffect(() => {
-    const handleOnline = () => {
-      flushOfflineQueue({
-        onSynced: (count) => {
-          onNotify('success', `Synced ${count} offline clock event${count !== 1 ? 's' : ''}.`);
-        },
-        onFailed: (_evt, reason) => {
-          onNotify('error', `An offline clock event was rejected: ${reason}`);
-        },
-      });
-    };
-
-    window.addEventListener('online', handleOnline);
-
-    // On mount: if online and there are pending events, flush immediately
-    if (navigator.onLine) {
-      flushOfflineQueue({
-        onSynced: (count) => {
-          if (count > 0) {
-            onNotify('success', `Synced ${count} pending clock event${count !== 1 ? 's' : ''}.`);
-          }
-        },
-      });
-    }
-
-    return () => window.removeEventListener('online', handleOnline);
-  }, [onNotify]);
+  // ─── Flush is owned by startSyncScheduler in UserDashboard ────────────────
+  // Removed: this hook was calling flushOfflineQueue on online + mount, racing
+  // against the same calls in UserDashboard via _isFlushing, causing the
+  // winning caller's onSynced to fire but the losing caller's .finally() to
+  // run with synced=0 — leaving isSyncing state inconsistent and banners stuck.
 
   // ─── Attempt clock-in ─────────────────────────────────────────────────────
   const attempt = useCallback(
@@ -183,39 +159,22 @@ export function useAutoClockIn({
         isDelaySync,
       };
 
-      // ── Offline: queue to IndexedDB ────────────────────────────────────────
+      // ── Offline: save full payload to localStorage — sync on reconnect ─────
       if (!navigator.onLine) {
-        try {
-          await enqueueClockIn({
-            latitude:        pos.latitude,
-            longitude:       pos.longitude,
-            accuracy:        pos.accuracy ?? 0,
-            clientTimestamp: zoneEnteredAt.toISOString(),
-          });
-          // silent — the pending banner in UserDashboard communicates this
-        } catch {
-          onNotify('error', 'Failed to save offline clock-in. Please try again.');
-        }
+        savePendingClockIn({
+          latitude:        pos.latitude,
+          longitude:       pos.longitude,
+          accuracy:        pos.accuracy ?? 0,
+          isDelaySync:     true,
+          deviceId,
+          batteryLevel,
+          signalStrength,
+          clientTimeStamp, // already HH:mm:ss from zoneEnteredAt
+        });
+        // silent — the pending banner in UserDashboard shows this
         attemptingRef.current = false;
         return;
       }
-
-      // ── Flush any queued events first ──────────────────────────────────────
-      await flushOfflineQueue({
-        onSynced: (count) => {
-          onNotify('success', `Synced ${count} delayed clock event${count !== 1 ? 's' : ''}.`);
-        },
-      });
-
-      // If flush resolved an existing clock-in, don't double-submit
-      try {
-        const session = await getTodaySession();
-        if (session?.status === 'ACTIVE') {
-          onSuccess(session.id);
-          attemptingRef.current = false;
-          return;
-        }
-      } catch { /* fall through */ }
 
       // ── Online: submit with retries ───────────────────────────────────────
       while (retriesRef.current < MAX_RETRIES) {
@@ -262,14 +221,4 @@ export function useAutoClockIn({
   }, [position, branches, isClockedIn, attempt]);
 }
 
-/**
- * Exposed for manual flushing (e.g. "Sync Now" button in UserDashboard).
- * Re-exported from syncEngine for convenience.
- */
-export { flushOfflineQueue as flushOfflineClockInQueue };
 
-/**
- * Exposed for UserDashboard to check if there's an open offline session
- * to attach a clock-out against.
- */
-export { getOpenOfflineSession };

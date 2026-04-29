@@ -93,7 +93,7 @@ public class AttendanceService {
                         "You are not within the perimeter of any registered branch."));
 
         // Validates that the device location matches its reported position.
-        if (request.accuracy() > 150){
+        if (request.accuracy() > 200){
             throw new BadRequestException("Location accuracy is low. Trying again.");
         }
 
@@ -155,6 +155,14 @@ public class AttendanceService {
      * Helper to log the details of the clock-event
      * */
     private static @NonNull AuditLog getAuditLog(User user, ClockInRequest request) {
+        int signalValue;
+
+        if (request.signalStrength() == null){
+            signalValue = -1;
+        } else {
+            signalValue = request.signalStrength();;
+        }
+
         return AuditLog.builder()
                 .fullName(user.getFullName())
                 .userId(user.getId())
@@ -162,7 +170,7 @@ public class AttendanceService {
                 .auditInfo(Map.of(
                         "deviceId", request.deviceId(),
                         "batteryLevel", request.batteryLevel(),
-                        "signalStrength", request.signalStrength(),
+                        "signalStrength", signalValue,
                         "gpsAccuracy", request.accuracy(),
                         "clientTimeStamp", request.clientTimeStamp(),
                         "verified", true,
