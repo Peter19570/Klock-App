@@ -428,7 +428,10 @@ export function UserDashboard() {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message
         ?? 'Clock-in failed. Please try again.';
+      // api.ts sanitizer already stripped stack traces — safe to show directly
       notify('error', msg);
+      // Surface fallback manual button if backend flagged a location issue
+      setManualClockInEnabled(true);
     } finally {
       setActionLoading(false);
     }
@@ -534,9 +537,12 @@ export function UserDashboard() {
               setCooldownActive(false);
               setSessionDoneForToday(false);
               await handleClockInSuccess(res.data.data.id);
-            } catch {
+            } catch (err: unknown) {
               setCooldownActive(false);
-              notify('error', 'Auto re-clock-in failed. Please clock in manually.');
+              const msg =
+                (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+                ?? 'Auto re-clock-in failed. Please clock in manually.';
+              notify('error', msg);
               setManualClockInEnabled(true);
             }
           } else {
@@ -548,8 +554,11 @@ export function UserDashboard() {
       }, MANUAL_RECLOCKING_DELAY_MS);
 
       await handleClockOutSuccess();
-    } catch {
-      notify('error', 'Clock-out failed. Please try again.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Clock-out failed. Please try again.';
+      notify('error', msg);
       setSessionDoneForToday(false);
     } finally {
       setActionLoading(false);
@@ -571,8 +580,11 @@ export function UserDashboard() {
       setHasPending(false);
       notify('success', 'Offline clock-in synced successfully.');
       await handleClockInSuccessRef.current(res.data.data.id);
-    } catch {
-      notify('error', 'Sync failed. Will retry automatically.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'Sync failed. Will retry automatically.';
+      notify('error', msg);
     }
   }, [notify]);
 

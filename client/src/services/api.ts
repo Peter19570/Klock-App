@@ -79,6 +79,29 @@ export function clearLoggingOutFlag() {
 }
 
 // ---------------------------------------------------------------------------
+// Error message sanitizer
+// Reads the backend `message` field from ApiResponse<T> and replaces it with
+// a generic fallback if it looks like a stack trace or is suspiciously long.
+// ---------------------------------------------------------------------------
+const GENERIC_SERVER_ERROR = 'Server error occurred. Please try again later.';
+const MAX_SAFE_MESSAGE_LEN = 200;
+
+function sanitizeErrorMessage(error: unknown): void {
+  const data = (error as { response?: { data?: { message?: string } } })
+    ?.response?.data;
+  if (!data || typeof data.message !== 'string') return;
+
+  const msg = data.message;
+  const looksLikeTechnical =
+    msg.length > MAX_SAFE_MESSAGE_LEN ||
+    /Exception|at\s+\w+\.\w+\(|NullPointer|StackTrace|java\.|org\.|com\.\w+\.\w+/.test(msg);
+
+  if (looksLikeTechnical) {
+    data.message = GENERIC_SERVER_ERROR;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Response interceptor
 // ---------------------------------------------------------------------------
 api.interceptors.response.use(
@@ -89,6 +112,9 @@ api.interceptors.response.use(
   async (error) => {
     // Network error (no response) = definitely offline
     if (!error.response) markOffline();
+
+    // Sanitize before anything else touches the error
+    sanitizeErrorMessage(error);
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
