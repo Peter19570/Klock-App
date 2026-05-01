@@ -43,6 +43,14 @@ export interface UserResponse {
   avgEntryProximityDistance?: number | null;
 }
 
+// ─── Admin user update ────────────────────────────────────────────────────────
+export interface AdminUpdateUserRequest {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+}
+
 // ─── User creation (Super Admin only) ────────────────────────────────────────
 export interface UserCreationRequest {
   email: string;

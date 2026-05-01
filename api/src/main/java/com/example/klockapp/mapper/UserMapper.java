@@ -17,14 +17,12 @@ public interface UserMapper {
 
     @Mapping(target = "homeBranchName", source = "homeBranch.displayName")
     UserDetailResponse toDetailDto(User user);
-//
-//    @Mapping(target = "id", ignore = true)
-//    User toEntity(AuthRequest request);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "fullName", expression = "java(request.firstName() + \" \" + request.lastName())")
     User toUserEntity(UserCreationRequest request);
 
+    @Mapping(target = "fullName", expression = "java(request.firstName() + \" \" + request.lastName())")
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void updateEntityFromDto(@RequestBody UserUpdateRequest request, @MappingTarget User user);
 }

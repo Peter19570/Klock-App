@@ -3,16 +3,16 @@ import * as ReactDOM from 'react-dom';
 import {
   Search, Trash2, ChevronLeft, ChevronRight, User, Plus,
   ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
-  FileText, MapPin, Navigation, MoreVertical,
+  FileText, MapPin, Navigation, MoreVertical, Pencil, KeyRound, Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/services/api';
-import { transferUser } from '@/services/userService';
+import { transferUser, updateUserProfile, adminResetPassword, adminResetDeviceId } from '@/services/userService';
 import { getLocationHistory } from '@/services/sessionService';
-import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse, LocationResponse, UserRole } from '@/types';
+import type { UserResponse, UserDetailResponse, ApiResponse, PageResponse, BranchResponse, LocationResponse, UserRole, AdminUpdateUserRequest } from '@/types';
 import UserSessionsPage from './UserSessionsPage';
 import UserLogsPage from '../pages/UserLogsPage';
 
@@ -470,6 +470,158 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
   );
 }
 
+// ─── Edit User Modal ───────────────────────────────────────────────────────────
+
+interface EditUserModalProps {
+  open: boolean;
+  user: UserDetailResponse | UserResponse | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName]   = React.useState('');
+  const [email, setEmail]         = React.useState('');
+  const [role, setRole]           = React.useState<UserRole>('USER');
+  const [saving, setSaving]       = React.useState(false);
+  const [error, setError]         = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (open && user) {
+      // UserDetailResponse has firstName/lastName; UserResponse has fullName
+      if ('firstName' in user) {
+        setFirstName(user.firstName);
+        setLastName(user.lastName);
+      } else {
+        const parts = user.fullName.split(' ');
+        setFirstName(parts[0] ?? '');
+        setLastName(parts.slice(1).join(' '));
+      }
+      setEmail(user.email);
+      setRole(user.role ?? 'USER');
+      setError(null);
+    }
+  }, [open, user]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: AdminUpdateUserRequest = { firstName, lastName, email, role };
+      await updateUserProfile(user.id, payload);
+      onSaved();
+      onClose();
+    } catch {
+      setError('Failed to update user. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[70]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 16 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 16 }}
+            transition={{ duration: 0.18 }}
+            className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Edit User</h2>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} disabled={saving}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">First Name</Label>
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First name"
+                    className="h-9"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Last Name</Label>
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last name"
+                    className="h-9"
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email</Label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="h-9"
+                  disabled={saving}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Role</Label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  disabled={saving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                >
+                  <option value="USER">Employee</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="SUPER_ADMIN">Super Admin</option>
+                </select>
+              </div>
+
+              {error && (
+                <p className="text-xs text-destructive">{error}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2.5 mt-5">
+              <Button variant="outline" className="flex-1 h-9 text-sm" onClick={onClose} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 h-9 text-sm"
+                onClick={handleSave}
+                disabled={saving || !firstName.trim() || !lastName.trim() || !email.trim()}
+              >
+                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Save Changes'}
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 // ─── User Action Sheet (mobile) ────────────────────────────────────────────────
@@ -482,9 +634,12 @@ interface UserActionSheetProps {
   onClose: () => void;
   onTransfer: () => void;
   onDelete: () => void;
+  onEdit: () => void;
+  onResetPassword: () => void;
+  onResetDevice: () => void;
 }
 
-function UserActionSheet({ open, user, isSuperAdmin, hasBranches, onClose, onTransfer, onDelete }: UserActionSheetProps) {
+function UserActionSheet({ open, user, isSuperAdmin, hasBranches, onClose, onTransfer, onDelete, onEdit, onResetPassword, onResetDevice }: UserActionSheetProps) {
   if (!user) return null;
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -514,6 +669,27 @@ function UserActionSheet({ open, user, isSuperAdmin, hasBranches, onClose, onTra
             </div>
             {/* Actions */}
             <div className="flex flex-col py-2">
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                onClick={() => { onEdit(); onClose(); }}
+              >
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+                Edit Profile
+              </button>
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                onClick={() => { onResetPassword(); onClose(); }}
+              >
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                Reset Password
+              </button>
+              <button
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
+                onClick={() => { onResetDevice(); onClose(); }}
+              >
+                <Smartphone className="h-4 w-4 text-muted-foreground" />
+                Reset Device ID
+              </button>
               {isSuperAdmin && hasBranches && (
                 <button
                   className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
@@ -658,6 +834,15 @@ export default function AdminUsers({
   const [userView, setUserView]         = React.useState<UserView>('list');
   const [actionSheetUser, setActionSheetUser] = React.useState<UserResponse | null>(null);
 
+  // ── New admin action state ─────────────────────────────────────────────────
+  const [editUser, setEditUser]                       = React.useState<UserResponse | null>(null);
+  const [resetPasswordUserId, setResetPasswordUserId] = React.useState<number | null>(null);
+  const [resetPasswordName, setResetPasswordName]     = React.useState('');
+  const [resettingPassword, setResettingPassword]     = React.useState(false);
+  const [resetDeviceUserId, setResetDeviceUserId]     = React.useState<number | null>(null);
+  const [resetDeviceName, setResetDeviceName]         = React.useState('');
+  const [resettingDevice, setResettingDevice]         = React.useState(false);
+
   const fetchUsers = React.useCallback(async (page: number) => {
     setLoading(true);
     try {
@@ -728,6 +913,32 @@ export default function AdminUsers({
     setRefreshing(true);
     await fetchUsers(currentPage);
     setRefreshing(false);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordUserId) return;
+    setResettingPassword(true);
+    try {
+      await adminResetPassword(resetPasswordUserId);
+      setResetPasswordUserId(null);
+    } catch (err) {
+      console.error('Failed to reset password', err);
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
+  const handleResetDevice = async () => {
+    if (!resetDeviceUserId) return;
+    setResettingDevice(true);
+    try {
+      await adminResetDeviceId(resetDeviceUserId);
+      setResetDeviceUserId(null);
+    } catch (err) {
+      console.error('Failed to reset device ID', err);
+    } finally {
+      setResettingDevice(false);
+    }
   };
 
   const activeFilterCount = [
@@ -954,6 +1165,36 @@ export default function AdminUsers({
                       className="flex items-center gap-1 overflow-hidden w-0 group-hover:w-auto group-focus-within:w-auto transition-all duration-200 ease-out"
                       onClick={(e) => e.stopPropagation()}
                     >
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary"
+                      onClick={() => setEditUser(user)}
+                      title="Edit profile"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-amber-500"
+                      onClick={() => { setResetPasswordUserId(user.id); setResetPasswordName(user.fullName); }}
+                      title="Reset password"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-full text-muted-foreground hover:text-blue-500"
+                      onClick={() => { setResetDeviceUserId(user.id); setResetDeviceName(user.fullName); }}
+                      title="Reset device ID"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                    </Button>
+
                     {isSuperAdmin && branches.length > 0 && (
                       <Button
                         size="icon"
@@ -1045,7 +1286,107 @@ export default function AdminUsers({
         onClose={() => setActionSheetUser(null)}
         onTransfer={() => { if (actionSheetUser) { setTransferUserId(actionSheetUser.id); setTransferBranchId(null); } }}
         onDelete={() => { if (actionSheetUser) setDeleteConfirm(actionSheetUser.id); }}
+        onEdit={() => { if (actionSheetUser) setEditUser(actionSheetUser); }}
+        onResetPassword={() => { if (actionSheetUser) { setResetPasswordUserId(actionSheetUser.id); setResetPasswordName(actionSheetUser.fullName); } }}
+        onResetDevice={() => { if (actionSheetUser) { setResetDeviceUserId(actionSheetUser.id); setResetDeviceName(actionSheetUser.fullName); } }}
       />
+
+      <EditUserModal
+        open={editUser !== null}
+        user={editUser}
+        onClose={() => setEditUser(null)}
+        onSaved={() => fetchUsers(currentPage)}
+      />
+
+      {/* Password Reset Confirm Modal */}
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {resetPasswordUserId !== null && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[90]"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setResetPasswordUserId(null); }}
+            >
+              <motion.div
+                initial={{ scale: 0.96, opacity: 0, y: 16 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 16 }}
+                transition={{ duration: 0.18 }}
+                className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center justify-center h-9 w-9 rounded-full bg-amber-400/15 shrink-0">
+                    <KeyRound className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Reset Password?</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <span className="font-medium text-foreground truncate block">{resetPasswordName}</span>
+                      will need to set a new password on next login.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 mt-5">
+                  <Button variant="outline" className="flex-1 h-9 text-sm" onClick={() => setResetPasswordUserId(null)} disabled={resettingPassword}>
+                    Cancel
+                  </Button>
+                  <Button className="flex-1 h-9 text-sm bg-amber-500 hover:bg-amber-600 text-white" onClick={handleResetPassword} disabled={resettingPassword}>
+                    {resettingPassword ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Resetting…</> : 'Confirm Reset'}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+
+      {/* Device ID Reset Confirm Modal */}
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {resetDeviceUserId !== null && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[90]"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setResetDeviceUserId(null); }}
+            >
+              <motion.div
+                initial={{ scale: 0.96, opacity: 0, y: 16 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 16 }}
+                transition={{ duration: 0.18 }}
+                className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-400/15 shrink-0">
+                    <Smartphone className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Reset Device ID?</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <span className="font-medium text-foreground truncate block">{resetDeviceName}</span>
+                      's device will be re-registered on next login.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 mt-5">
+                  <Button variant="outline" className="flex-1 h-9 text-sm" onClick={() => setResetDeviceUserId(null)} disabled={resettingDevice}>
+                    Cancel
+                  </Button>
+                  <Button className="flex-1 h-9 text-sm bg-blue-500 hover:bg-blue-600 text-white" onClick={handleResetDevice} disabled={resettingDevice}>
+                    {resettingDevice ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Resetting…</> : 'Confirm Reset'}
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
 
       {/* Mobile delete confirm — shown when deleteConfirm is set but action came from mobile sheet */}
       {ReactDOM.createPortal(
