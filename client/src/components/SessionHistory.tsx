@@ -349,9 +349,33 @@ function SessionCard({
             className="overflow-hidden"
           >
             <div className="px-4 pb-3 space-y-1.5 border-t border-border pt-3">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                Clock Events
-              </p>
+              <div className="flex items-center justify-between mb-1.5 flex-wrap gap-y-1.5">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Clock Events
+                </p>
+                {/* ── Legend ── */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Clock className="h-3 w-3 text-emerald-500 shrink-0" />
+                    Clock-in
+                  </span>
+                  <span className="text-muted-foreground/40 text-[10px]">·</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <LogOut className="h-3 w-3 text-foreground/50 shrink-0" />
+                    Clock-out
+                  </span>
+                  <span className="text-muted-foreground/40 text-[10px]">·</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Hand className="h-3 w-3 text-amber-400 shrink-0" />
+                    Manual
+                  </span>
+                  <span className="text-muted-foreground/40 text-[10px]">·</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Zap className="h-3 w-3 text-sky-400 shrink-0" />
+                    Auto
+                  </span>
+                </div>
+              </div>
               {session.movements.length > 0 ? (
                 session.movements.map((m) => (
                   <MovementRow key={m.id} movement={m} />
