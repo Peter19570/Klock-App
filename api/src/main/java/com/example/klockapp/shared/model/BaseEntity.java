@@ -1,4 +1,4 @@
-package com.example.klockapp.common.model;
+package com.example.klockapp.shared.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;

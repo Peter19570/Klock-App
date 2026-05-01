@@ -11,5 +11,7 @@ import java.util.List;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface AuditLogMapper {
 
+    AuditLogResponse toDto(AuditLog auditLog);
+
     List<AuditLogResponse> toListDto(List<AuditLog> auditLogs);
 }

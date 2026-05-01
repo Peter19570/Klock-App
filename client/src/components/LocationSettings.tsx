@@ -67,9 +67,12 @@ export default function LocationSettings({
         setOriginal(detail);
         setDisplayName(detail.displayName ?? "");
         setRadiusRaw(String(detail.radius));
-        setDurationRaw(String(detail.autoClockOutDuration ?? 0));
-        setShiftStart(detail.shiftStart ?? "");
-        setShiftEnd(detail.shiftEnd ?? "");
+        // Backend stores autoClockOutDuration in seconds (as a double) — display as minutes
+        const durationSecs = detail.autoClockOutDuration ?? 0;
+        setDurationRaw(String(Math.round(durationSecs / 60)));
+        // Backend may send "HH:MM:SS" — strip seconds, keep "HH:MM" for the time input
+        setShiftStart((detail.shiftStart ?? "").slice(0, 5));
+        setShiftEnd((detail.shiftEnd ?? "").slice(0, 5));
 
         // Lat/lng from BranchDetailsResponse (present in the GET /branches/{id} response)
         if (!hideCoordinates) {
@@ -92,7 +95,8 @@ export default function LocationSettings({
 
   const handleSave = React.useCallback(async () => {
     const radiusVal   = parseFloat(radiusRaw);
-    const durationVal = parseInt(durationRaw, 10);
+    // Display is in minutes; backend expects seconds
+    const durationVal = parseInt(durationRaw, 10) * 60;
     const latVal      = parseFloat(latRaw);
     const lngVal      = parseFloat(lngRaw);
 

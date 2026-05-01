@@ -905,7 +905,7 @@ export default function AdminUsers({
                     <p className="text-sm text-muted-foreground truncate mt-0.5">
                       {user.email}
                     </p>
-                    {/* Mobile: branch + role under name */}
+                    {/* Mobile: branch + role + proximity under name */}
                     <div className="sm:hidden flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {user.homeBranchName && (
                         <p className="text-xs text-muted-foreground/70 truncate">
@@ -913,6 +913,12 @@ export default function AdminUsers({
                         </p>
                       )}
                       {user.role && <RolePill role={user.role} />}
+                      {user.avgEntryProximityDistance != null && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 bg-muted/50 px-1.5 py-0.5 rounded-full border border-border/50 shrink-0">
+                          <Navigation className="h-2.5 w-2.5 shrink-0" />
+                          {Math.round(user.avgEntryProximityDistance)}m avg
+                        </span>
+                      )}
                     </div>
                   </button>
 
@@ -932,6 +938,12 @@ export default function AdminUsers({
                       {user.homeBranchName && (
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70 max-w-[140px] truncate">
                           📍 {user.homeBranchName}
+                        </span>
+                      )}
+                      {user.avgEntryProximityDistance != null && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 bg-muted/50 px-1.5 py-0.5 rounded-full border border-border/50 shrink-0">
+                          <Navigation className="h-2.5 w-2.5 shrink-0" />
+                          {Math.round(user.avgEntryProximityDistance)}m avg
                         </span>
                       )}
                       {user.role && <RolePill role={user.role} />}

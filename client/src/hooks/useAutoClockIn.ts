@@ -14,7 +14,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import { haversineDistance } from '../lib/utils';
 import { clockIn, getActiveMovement, getTodaySession } from '../services/sessionService';
 import { getMe } from '../services/userService';
-import { savePendingClockIn } from '../services/offlineClockQueue';
+import { savePendingClockIn, hasPendingClockIn } from '../services/offlineClockQueue';
+import { isOnline } from '../services/connectivityStore';
 import api from '../services/api';
 import type { GeoPosition, ClockInRequest } from '../types';
 
@@ -160,7 +161,7 @@ export function useAutoClockIn({
       };
 
       // ── Offline: save full payload to localStorage — sync on reconnect ─────
-      if (!navigator.onLine) {
+      if (!isOnline()) {
         savePendingClockIn({
           latitude:        pos.latitude,
           longitude:       pos.longitude,
@@ -204,7 +205,9 @@ export function useAutoClockIn({
 
   // ─── Watch GPS position ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!position || isClockedIn || branches.length === 0) return;
+    // Skip if already clocked in, or if there's a pending offline clock-in
+    // waiting to sync — handleOnline in UserDashboard owns that path.
+    if (!position || isClockedIn || branches.length === 0 || hasPendingClockIn()) return;
 
     const isInside = branches.some(
       (b) => haversineDistance(position.latitude, position.longitude, b.lat, b.lng) <= b.radius,

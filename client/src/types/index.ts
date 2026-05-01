@@ -39,6 +39,8 @@ export interface UserResponse {
   picture: string;
   homeBranchName?: string;
   role?: UserRole;
+  /** Average distance (metres) from branch at clock-in across all sessions */
+  avgEntryProximityDistance?: number | null;
 }
 
 // ─── User creation (Super Admin only) ────────────────────────────────────────

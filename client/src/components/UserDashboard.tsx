@@ -35,6 +35,11 @@ import {
   clearPendingClockIn,
   hasPendingClockIn,
 } from '../services/offlineClockQueue';
+import {
+  isOnline,
+  onConnectivityChange,
+  startConnectivityMonitor,
+} from '../services/connectivityStore';
 import type { SessionResponse, BranchResponse } from '../types';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,7 +91,7 @@ export function UserDashboard() {
   const [hooksReady, setHooksReady]             = useState(false);
 
   // ─── Offline state ───────────────────────────────────────────────────────
-  const [isOffline, setIsOffline]               = useState(() => !navigator.onLine);
+  const [isOffline, setIsOffline]               = useState(() => !isOnline());
   // Synchronous localStorage check — no async, no race conditions
   const [hasPending, setHasPending]             = useState(() => hasPendingClockIn());
 
@@ -116,20 +121,29 @@ export function UserDashboard() {
     setHasPending(hasPendingClockIn());
   }, []);
 
-  // ─── Online / offline tracking + pending clock-in sync ──────────────────
+  // ─── Connectivity tracking (connectivityStore — works on real network loss) ──
   useEffect(() => {
-    const handleOnline = async () => {
-      setIsOffline(false);
+    // Start heartbeat monitor — pings /favicon.ico every 30s and verifies
+    // native online/offline events with a real request. Returns cleanup fn.
+    const stopMonitor = startConnectivityMonitor();
+
+    const unsub = onConnectivityChange(async (online) => {
+      setIsOffline(!online);
+      if (!online) return;
+
+      // Just came online — check for pending offline clock-in first
       const pending = getPendingClockIn();
       if (pending) {
-        // There's a queued offline clock-in — send it now, skip auto clock-in
+        // Optimistically set clocked-in so auto hooks don't fire a duplicate
+        setIsClockedIn(true);
         try {
-          const res = await clockIn(pending); // payload is already complete
+          const res = await clockIn(pending);
           clearPendingClockIn();
           setHasPending(false);
           notify('success', 'Offline clock-in synced successfully.');
           await handleClockInSuccessRef.current(res.data.data.id);
         } catch {
+          setIsClockedIn(false);
           notify('error', 'Failed to sync offline clock-in. Will retry on next reconnect.');
         }
       } else {
@@ -144,13 +158,11 @@ export function UserDashboard() {
           }
         } catch { /* silent */ }
       }
-    };
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online',  handleOnline);
-    window.addEventListener('offline', handleOffline);
+    });
+
     return () => {
-      window.removeEventListener('online',  handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      stopMonitor();
+      unsub();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -230,7 +242,7 @@ export function UserDashboard() {
   // ─── Poll branches ────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(async () => {
-      if (!navigator.onLine) return;
+      if (!isOnline()) return;
       try {
         const res      = await getAllBranches({ page: 0, size: 100 });
         const fetched  = res.data.data.content ?? [];
@@ -255,7 +267,7 @@ export function UserDashboard() {
   const roundedLat = position ? Math.round(position.latitude  * 10_000) : null;
   const roundedLng = position ? Math.round(position.longitude * 10_000) : null;
   useEffect(() => {
-    if (!position || !navigator.onLine) return;
+    if (!position || !isOnline()) return;
     reverseGeocode(position.latitude, position.longitude).then(setLocationName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundedLat, roundedLng]);
@@ -334,7 +346,7 @@ export function UserDashboard() {
     setActionLoading(true);
 
     // ── Offline: save full payload to localStorage — sync on reconnect ────
-    if (!navigator.onLine) {
+    if (!isOnline()) {
       const now = new Date();
       // Battery API reads from device hardware — works offline
       let batteryLevel: number | undefined;
@@ -431,7 +443,7 @@ export function UserDashboard() {
       // ── Offline clock-out ────────────────────────────────────────────────
       // If there's a pending (unsynced) clock-in, the user never truly clocked
       // in on the server — cancel the pending clock-in instead.
-      if (!navigator.onLine) {
+      if (!isOnline()) {
         if (hasPendingClockIn()) {
           clearPendingClockIn();
           setHasPending(false);
@@ -550,7 +562,7 @@ export function UserDashboard() {
 
   // ─── Manual sync — retry if the online handler failed ───────────────────
   const handleManualFlush = useCallback(async () => {
-    if (!navigator.onLine) return;
+    if (!isOnline()) return;
     const pending = getPendingClockIn();
     if (!pending) return;
     try {

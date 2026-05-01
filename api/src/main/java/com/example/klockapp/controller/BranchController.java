@@ -1,12 +1,13 @@
 package com.example.klockapp.controller;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.BranchRequest;
 import com.example.klockapp.dto.request.BranchStatusRequest;
-import com.example.klockapp.dto.response.ApiResponse;
+import com.example.klockapp.shared.dto.response.ApiResponse;
 import com.example.klockapp.dto.response.BranchDetailsResponse;
 import com.example.klockapp.dto.response.BranchResponse;
 import com.example.klockapp.service.BranchService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/branches")
 @RequiredArgsConstructor
+@Tag(name = "Branch")
 public class BranchController {
 
     private final BranchService branchService;

@@ -7,6 +7,8 @@ import com.example.klockapp.model.AuditLog;
 import com.example.klockapp.repo.AuditLogRepo;
 import com.example.klockapp.specification.AuditLogSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,16 +25,9 @@ public class AuditLogService {
     /**
      * Get all logs in the database
      * */
-    public List<AuditLogResponse> showAllLogs(AuditLogFilter filter){
-        List<AuditLog> auditLogs = auditLogRepo.findAll(AuditLogSpecification.withFilter(filter));
-        return auditLogMapper.toListDto(auditLogs);
-    }
-
-    /**
-     * Get all logs in the database that belong to a user
-     * */
-    public List<AuditLogResponse> showAllUserLogs(AuditLogFilter filter){
-        List<AuditLog> auditLogs = auditLogRepo.findAll(AuditLogSpecification.withFilter(filter));
-        return auditLogMapper.toListDto(auditLogs);
+    public Page<AuditLogResponse> showAllUserLogs(AuditLogFilter filter, Pageable pageable){
+        Page<AuditLog> auditLogPage = auditLogRepo
+                .findAll(AuditLogSpecification.withFilter(filter),pageable);
+        return auditLogPage.map(auditLogMapper::toDto);
     }
 }

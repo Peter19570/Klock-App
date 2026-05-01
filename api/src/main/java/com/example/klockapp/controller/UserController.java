@@ -1,12 +1,14 @@
 package com.example.klockapp.controller;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.dto.request.UserUpdateRequest;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.UserCreationRequest;
-import com.example.klockapp.dto.response.ApiResponse;
+import com.example.klockapp.shared.dto.response.ApiResponse;
 import com.example.klockapp.dto.response.UserDetailResponse;
 import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.filter.UserFilter;
 import com.example.klockapp.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+@Tag(name = "User")
 public class UserController {
 
     private final UserService userService;
@@ -114,5 +117,34 @@ public class UserController {
         UserDetailResponse response = userService.createUser(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>("User created and assigned to branch", response));
+    }
+
+    /**
+     * Update user basic information
+     * */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<UserDetailResponse>> updateUser(
+            @RequestBody UserUpdateRequest request,
+            @PathVariable Long id){
+        UserDetailResponse response = userService.updateUser(request, id);
+        return ResponseEntity.ok(new ApiResponse<>("User updated successfully", response));
+    }
+
+    /**
+     * Reset password for a user who has forgotten their password
+     * */
+    @PutMapping("/reset-password/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> resetUserPassword(@PathVariable Long id){
+        userService.resetUserPassword(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/reset-device-id/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
+    public ResponseEntity<Void> restUserDeviceId(@PathVariable Long id){
+        userService.resetUserDeviceId(id);
+        return ResponseEntity.ok().build();
     }
 }

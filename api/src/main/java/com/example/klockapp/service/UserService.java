@@ -1,13 +1,13 @@
 package com.example.klockapp.service;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.UserCreationRequest;
+import com.example.klockapp.dto.request.UserUpdateRequest;
 import com.example.klockapp.dto.response.UserDetailResponse;
 import com.example.klockapp.dto.response.UserResponse;
 import com.example.klockapp.enums.UserRole;
 import com.example.klockapp.exception.custom.AccessDeniedException;
 import com.example.klockapp.exception.custom.NotFoundException;
-import com.example.klockapp.exception.custom.PasswordNotChangedException;
 import com.example.klockapp.filter.UserFilter;
 import com.example.klockapp.mapper.UserMapper;
 import com.example.klockapp.model.Branch;
@@ -53,13 +53,10 @@ public class UserService {
      */
     public Page<UserResponse> getAllUsers(
             Pageable pageable, UserFilter filter, CustomUserPrincipal principal) {
-        // Role Enforcement Logic: If Admin, force filter to their managed branch
         if (principal.user().getRole() == UserRole.ADMIN) {
-            // Force the filter to the Admin's own home branch to ensure branch isolation
             filter.setHomeBranchId(principal.user().getHomeBranch().getId());
         }
 
-        // Super Admin can pass a null homeBranchId to see everyone globally
         return userRepo.findAll(UserSpecifications.withFilter(filter), pageable)
                 .map(userMapper::toDto);
     }
@@ -107,7 +104,6 @@ public class UserService {
      */
     @Transactional
     public UserDetailResponse createUser(UserCreationRequest request) {
-
         if (userRepo.existsByEmail(request.email())) {
             throw new IllegalStateException("Email already registered.");
         }
@@ -122,5 +118,34 @@ public class UserService {
         user.setHomeBranch(branch);    // This is the branch they manage
 
         return userMapper.toDetailDto(userRepo.save(user));
+    }
+
+    /**
+     * Super Admin: Update user's data including their device ID
+     * */
+    @Transactional
+    public UserDetailResponse updateUser(UserUpdateRequest request, Long id){
+        User user = userRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        userMapper.updateEntityFromDto(request, user);
+        return userMapper.toDetailDto(user);
+    }
+
+    /**
+     * Reset password for a user who has forgotten their password
+     * */
+    @Transactional
+    public void resetUserPassword(Long id){
+        User user = userRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.setPassword(passwordEncoder.encode(user.getFirstName().toLowerCase()  + "@12345"));
+        user.setMustChangePassword(true);
+    }
+
+    @Transactional
+    public void resetUserDeviceId(Long id){
+        User user = userRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        user.setDeviceId("NOT SET");
     }
 }

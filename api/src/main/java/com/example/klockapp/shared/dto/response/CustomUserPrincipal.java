@@ -1,4 +1,4 @@
-package com.example.klockapp.common.dto.response;
+package com.example.klockapp.shared.dto.response;
 
 import com.example.klockapp.model.User;
 import org.jspecify.annotations.NonNull;

@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import axios from "axios";
+import { markOnline, markOffline } from "./connectivityStore";
 import type { InternalAxiosRequestConfig } from "axios";
 
 // ---------------------------------------------------------------------------
@@ -81,8 +82,13 @@ export function clearLoggingOutFlag() {
 // Response interceptor
 // ---------------------------------------------------------------------------
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    markOnline();
+    return response;
+  },
   async (error) => {
+    // Network error (no response) = definitely offline
+    if (!error.response) markOffline();
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };

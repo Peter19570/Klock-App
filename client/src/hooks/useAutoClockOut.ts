@@ -17,6 +17,8 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import { hasPendingClockIn } from '../services/offlineClockQueue';
+import { isOnline } from '../services/connectivityStore';
 import { haversineDistance } from '../lib/utils';
 import { clockOut } from '../services/sessionService';
 import {
@@ -181,7 +183,7 @@ export function useAutoClockOut({
     const pos = positionRef.current;
 
     // ── Offline: queue to IndexedDB ────────────────────────────────────────
-    if (!navigator.onLine) {
+    if (!isOnline()) {
       try {
         const openSession = await getOpenOfflineSession();
         const sessionId   = openSession?.sessionId;
@@ -295,7 +297,10 @@ export function useAutoClockOut({
   // ─── Main distance-check effect ─────────────────────────────────────────
 
   useEffect(() => {
-    if (!position || !isClockedIn || branches.length === 0) return;
+    // If there's a pending offline clock-in being synced, isClockedIn may have
+    // been set optimistically. Don't start a clock-out countdown until the sync
+    // fully completes and the pending key is cleared.
+    if (!position || !isClockedIn || branches.length === 0 || hasPendingClockIn()) return;
 
     const inside = isInsideAnyBranch(position, branches);
 

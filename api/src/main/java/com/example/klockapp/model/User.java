@@ -1,12 +1,13 @@
 package com.example.klockapp.model;
 
-import com.example.klockapp.common.BaseEntity;
+import com.example.klockapp.shared.model.BaseEntity;
 import com.example.klockapp.enums.UserRole;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,13 +39,13 @@ public class User extends BaseEntity {
     private String picture;
 
     @Column
-    private String provider;
-
-    @Column
-    private String deviceId;
+    private String deviceId = "NOT SET";
 
     @Column
     private Boolean mustChangePassword = true;
+
+    @Formula("(SELECT AVG(ce.entry_proximity_distance) FROM clock_events ce WHERE ce.user_id = id)")
+    private Double avgEntryProximityDistance;
 
     @Enumerated(EnumType.STRING)
     private UserRole role = UserRole.USER;
@@ -58,4 +59,7 @@ public class User extends BaseEntity {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RefreshToken> tokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ClockEvent> clockEvents = new ArrayList<>();
 }

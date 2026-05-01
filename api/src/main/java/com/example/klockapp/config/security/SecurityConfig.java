@@ -53,6 +53,7 @@ public class SecurityConfig {
     public CorsConfigurationSource configurationSource(){
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of(
+                "http://10.203.18.221:5173",
                 "http://localhost:5173",
                 "https://localhost:5173",
                 "https://sandier-unpsychically-rickie.ngrok-free.dev"

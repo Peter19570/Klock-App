@@ -12,6 +12,7 @@ public record UserDetailResponse(
         String picture,
         String deviceId,
         UserRole role,
+        Double avgEntryProximityDistance,
         String homeBranchName, // Context for the user's base of operations
         Boolean mustChangePassword,
         Instant createdAt

@@ -1,6 +1,6 @@
 package com.example.klockapp.model;
 
-import com.example.klockapp.common.BaseEntity;
+import com.example.klockapp.shared.model.BaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -1,7 +1,6 @@
-package com.example.klockapp.exception;
+package com.example.klockapp.exception.handler;
 
-import com.cloudinary.Api;
-import com.example.klockapp.dto.response.ApiResponse;
+import com.example.klockapp.shared.dto.response.ApiResponse;
 import com.example.klockapp.exception.custom.*;
 import org.apache.coyote.BadRequestException;
 import org.springframework.http.HttpStatus;
@@ -20,7 +19,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleGeneralError(Exception ex){
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(ex.getMessage(), null));
+                .body(new ApiResponse<>("Server Error", ex.getMessage()));
     }
 
     @ExceptionHandler(NotFoundException.class)
@@ -57,7 +56,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             PasswordNotChangedException.class,
-            NullPointerException.class,
             IllegalStateException.class,
             SignatureException.class
     })

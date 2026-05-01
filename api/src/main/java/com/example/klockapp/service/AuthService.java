@@ -1,7 +1,7 @@
 package com.example.klockapp.service;
 
 import com.example.klockapp.config.security.jwt.JwtService;
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.AuthRequest;
 import com.example.klockapp.dto.request.DeviceIdRequest;
 import com.example.klockapp.dto.request.PasswordRequest;
@@ -14,6 +14,7 @@ import com.example.klockapp.repo.RefreshTokenRepo;
 import com.example.klockapp.repo.UserRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,7 +33,7 @@ public class AuthService {
     private final RefreshTokenRepo tokenRepo;
 
 
-    public AuthResponse login(AuthRequest request){
+    public AuthResponse login(AuthRequest request) {
         Authentication authentication = authenticationManager
                 .authenticate(new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
@@ -98,7 +99,7 @@ public class AuthService {
         userRepo.save(user);
     }
 
-    // Method to take device id on first log in
+    // Method to take device ID on first log in
     public void getDeviceId(DeviceIdRequest request, User user){
         user.setDeviceId(request.deviceId());
         userRepo.save(user);

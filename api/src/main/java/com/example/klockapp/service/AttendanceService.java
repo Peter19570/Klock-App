@@ -1,6 +1,6 @@
 package com.example.klockapp.service;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.ClockInRequest;
 import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
@@ -51,10 +51,7 @@ public class AttendanceService {
     private final ClockEventMapper clockEventMapper;
 
     /**
-     * Smart Clock-In Logic:
-     * 1. Iterates through branches to find a match.
-     * 2. Enforces "No Double Clock-In" guardrail.
-     * 3. Manages WorkSession (Parent) and ClockEvent (Child).
+     * Smart Clock-In Logic
      */
     public ClockEventResponse clockIn(User user, ClockInRequest request)
             throws BadRequestException {
@@ -70,7 +67,7 @@ public class AttendanceService {
         }
 
         if (true == request.isDelaySync()){
-            // Ensures that the clock-in request is actually valid 🙂
+            // Ensures that the offline clock-in request is actually valid 🙂
             if (delayedDiff > 86400){
                 throw new ExpiredClockInRequestException("Clock in request is expired");
             }
@@ -102,7 +99,12 @@ public class AttendanceService {
             throw new BadRequestException("Cannot clock-in at a branch past its end-shift");
         }
 
-        // Log user clock-in with a different device
+        // Ensure user don't clock-in if they don't have a device tied to them
+        if ("NOT SET".equals(user.getDeviceId())){
+            throw new BadRequestException("User has no saved device ID");
+        }
+
+        // Prevent user clock-in with a different device
         if (!(user.getDeviceId().equals(request.deviceId()))){
             AuditLog auditLog = AuditLog.builder()
                     .fullName(user.getFullName())
@@ -114,6 +116,7 @@ public class AttendanceService {
                     ))
                     .build();
             auditLogRepo.save(auditLog);
+            throw new BadRequestException("Saved device ID does not match current device ID");
         }
 
         // Calculate the distance btw the clock-in and clock-out
@@ -149,52 +152,6 @@ public class AttendanceService {
         auditLogRepo.save(auditLog);
 
         return clockEventMapper.toDto(clockEventRepo.save(event));
-    }
-
-    /**
-     * Helper to log the details of the clock-event
-     * */
-    private static @NonNull AuditLog getAuditLog(User user, ClockInRequest request) {
-        int signalValue;
-
-        if (request.signalStrength() == null){
-            signalValue = -1;
-        } else {
-            signalValue = request.signalStrength();;
-        }
-
-        return AuditLog.builder()
-                .fullName(user.getFullName())
-                .userId(user.getId())
-                .type(AuditOption.CLOCK_IN_SUCCESS)
-                .auditInfo(Map.of(
-                        "deviceId", request.deviceId(),
-                        "batteryLevel", request.batteryLevel(),
-                        "signalStrength", signalValue,
-                        "gpsAccuracy", request.accuracy(),
-                        "clientTimeStamp", request.clientTimeStamp(),
-                        "verified", true,
-                        "isDelayedSync", request.isDelaySync(),
-                        "latitude", request.latitude(),
-                        "longitude", request.longitude())
-                )
-                .build();
-    }
-
-    /**
-     * Helper to get the arrival status of a session
-     * */
-    private ArrivalStatus getArrivalStatus(Branch branch) {
-        LocalTime start = branch.getShiftStart();
-        LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
-
-        if (LocalTime.now().isBefore(start)) {
-            return ArrivalStatus.EARLY;
-        } else if (!LocalTime.now().isAfter(graceEnd)) {
-            return ArrivalStatus.ON_TIME;
-        } else {
-            return ArrivalStatus.LATE;
-        }
     }
 
     /**
@@ -277,17 +234,6 @@ public class AttendanceService {
     }
 
     /**
-     * Undo clock-out logic to toggle on previously clocked-out clock-event, Not used in this system at the moment
-     * */
-    public void undoClockOut(Long clockEventId) {
-        ClockEvent event = clockEventRepo.findById(clockEventId)
-                .orElseThrow(() -> new NotFoundException("Movement record not found."));
-        event.setClockOutTime(null);
-        event.setClockOutType(null);
-        clockEventRepo.save(event);
-    }
-
-    /**
      * Personal History:
      * Fetches WorkSessions with nested movements for the user.
      */
@@ -353,6 +299,9 @@ public class AttendanceService {
         }
     }
 
+    /**
+     * Helper method to create the csv file from db
+     * */
     private void writeToCsv(Writer writer, Stream<WorkSession> sessions) {
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setHeader(
@@ -391,6 +340,52 @@ public class AttendanceService {
             printer.flush();
         } catch (IOException e) {
             throw new WriteToCSVException("CSV Initialization Error", e.getMessage());
+        }
+    }
+
+    /**
+     * Helper to log the details of the clock-event
+     * */
+    private static @NonNull AuditLog getAuditLog(User user, ClockInRequest request) {
+        int signalValue;
+
+        if (request.signalStrength() == null){
+            signalValue = -1;
+        } else {
+            signalValue = request.signalStrength();;
+        }
+
+        return AuditLog.builder()
+                .fullName(user.getFullName())
+                .userId(user.getId())
+                .type(AuditOption.CLOCK_IN_SUCCESS)
+                .auditInfo(Map.of(
+                        "deviceId", request.deviceId(),
+                        "batteryLevel", request.batteryLevel(),
+                        "signalStrength", signalValue,
+                        "gpsAccuracy", request.accuracy(),
+                        "clientTimeStamp", request.clientTimeStamp(),
+                        "verified", true,
+                        "isDelayedSync", request.isDelaySync(),
+                        "latitude", request.latitude(),
+                        "longitude", request.longitude())
+                )
+                .build();
+    }
+
+    /**
+     * Helper to get the arrival status of a session
+     * */
+    private ArrivalStatus getArrivalStatus(Branch branch) {
+        LocalTime start = branch.getShiftStart();
+        LocalTime graceEnd = start.plus(Duration.ofMinutes(5));
+
+        if (LocalTime.now().isBefore(start)) {
+            return ArrivalStatus.EARLY;
+        } else if (!LocalTime.now().isAfter(graceEnd)) {
+            return ArrivalStatus.ON_TIME;
+        } else {
+            return ArrivalStatus.LATE;
         }
     }
 }

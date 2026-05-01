@@ -1,6 +1,6 @@
 package com.example.klockapp.config.security.jwt;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import jakarta.servlet.FilterChain;
@@ -64,13 +64,10 @@ public class JwtFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
 
         } catch (ExpiredJwtException e) {
-            handleException(response, "Token has expired", HttpServletResponse.SC_UNAUTHORIZED);
+            handleException(response, "Token has expired");
         } catch (MalformedJwtException e) {
-            handleException(response, "Invalid token format", HttpServletResponse.SC_UNAUTHORIZED);
+            handleException(response, "Invalid token format");
         }
-//        catch (Exception e) {
-//            handleException(response, "Authentication error", HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-//        }
     }
 
     // Smart retrieval method that checks both Authorization header and cookies for the access token
@@ -93,8 +90,8 @@ public class JwtFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private void handleException(HttpServletResponse response, String message, int status) throws IOException {
-        response.setStatus(status);
+    private void handleException(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
         String jsonResponse = String.format("{\"msg\": \"%s\"}", message);
         response.getWriter().write(jsonResponse);

@@ -1,4 +1,4 @@
-package com.example.klockapp.common.dto.response;
+package com.example.klockapp.shared.dto.response;
 
 public record ApiResponse<T>(
         String message,

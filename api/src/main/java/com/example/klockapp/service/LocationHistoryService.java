@@ -1,6 +1,6 @@
 package com.example.klockapp.service;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.LocationRequest;
 import com.example.klockapp.dto.response.LocationResponse;
 import com.example.klockapp.exception.custom.NotFoundException;
@@ -16,7 +16,6 @@ import com.example.klockapp.repo.WorkSessionRepo;
 import com.example.klockapp.specification.LocationHistorySpecification;
 import com.example.klockapp.util.LocationUtility;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -1,6 +1,6 @@
 package com.example.klockapp.model;
 
-import com.example.klockapp.common.BaseEntity;
+import com.example.klockapp.shared.model.BaseEntity;
 import com.example.klockapp.enums.ArrivalStatus;
 import com.example.klockapp.enums.SessionStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;

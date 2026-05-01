@@ -325,10 +325,10 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
     );
   };
 
-  // Format shift display
+  // Format shift display — trim backend "HH:MM:SS" down to "HH:MM"
   const shiftDisplay = (() => {
-    const s = details?.shiftStart ?? branch.shiftStart;
-    const e = details?.shiftEnd   ?? branch.shiftEnd;
+    const s = (details?.shiftStart ?? branch.shiftStart ?? '').slice(0, 5) || null;
+    const e = (details?.shiftEnd   ?? branch.shiftEnd   ?? '').slice(0, 5) || null;
     if (s && e) return `${s} – ${e}`;
     if (s)      return `From ${s}`;
     if (e)      return `Until ${e}`;
@@ -402,7 +402,7 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
             },
             ...(details.autoClockOutDuration != null ? [{
               label: 'Auto Clock-out',
-              value: `${Number(details.autoClockOutDuration).toFixed(2)}m`,
+              value: `${Math.round(Number(details.autoClockOutDuration) / 60)} min`,
               className: 'text-foreground',
             }] : []),
             ...(details.displayAvg != null ? [{
@@ -1073,11 +1073,11 @@ export function AdminDashboard() {
                                 <p className="text-sm text-muted-foreground truncate mt-0.5">
                                   {b.radius}m radius
                                   {b.shiftStart && b.shiftEnd
-                                    ? ` · ${b.shiftStart} – ${b.shiftEnd}`
+                                    ? ` · ${b.shiftStart.slice(0, 5)} – ${b.shiftEnd.slice(0, 5)}`
                                     : b.shiftStart
-                                    ? ` · from ${b.shiftStart}`
+                                    ? ` · from ${b.shiftStart.slice(0, 5)}`
                                     : b.shiftEnd
-                                    ? ` · until ${b.shiftEnd}`
+                                    ? ` · until ${b.shiftEnd.slice(0, 5)}`
                                     : ' · No shift set'}
                                 </p>
                               </button>

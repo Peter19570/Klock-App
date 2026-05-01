@@ -1,6 +1,6 @@
 package com.example.klockapp.service;
 
-import com.example.klockapp.dto.internal.CustomUserPrincipal;
+import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.BranchRequest;
 import com.example.klockapp.dto.request.BranchStatusRequest;
 import com.example.klockapp.dto.response.BranchDetailsResponse;
