@@ -393,45 +393,86 @@ function AuditFilterModal({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20;
+
 export default function AuditLogsPage() {
   const [logs, setLogs] = React.useState<AuditLogResponse[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState("");
   const [refreshing, setRefreshing] = React.useState(false);
   const [filters, setFilters] = React.useState<AuditFilters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = React.useState(false);
+  const [page, setPage] = React.useState(0);
+  const [hasMore, setHasMore] = React.useState(false);
+  const [totalElements, setTotalElements] = React.useState(0);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   const fetchLogs = React.useCallback(
-    async (showRefresh = false, overrideFilters?: AuditFilters) => {
-      if (showRefresh) setRefreshing(true);
-      else setLoading(true);
+    async (opts: { refresh?: boolean; reset?: boolean; overrideFilters?: AuditFilters; nextPage?: number } = {}) => {
+      const { refresh = false, reset = false, overrideFilters, nextPage } = opts;
+      if (refresh) setRefreshing(true);
+      else if (reset || nextPage === undefined) setLoading(true);
+      else setLoadingMore(true);
       setError("");
       try {
         const f = overrideFilters ?? filters;
-        const params: Record<string, string> = {};
+        const currentPage = nextPage ?? 0;
+        const params: Record<string, string> = {
+          page: String(currentPage),
+          size: String(PAGE_SIZE),
+        };
         if (f.date) params.date = f.date;
         if (f.auditOption) params.auditOption = f.auditOption;
         if (f.search) params.search = f.search;
-        const res = await getAllAuditLogs(
-          Object.keys(params).length ? params : undefined,
-        );
-        setLogs(res.data.data ?? []);
+        const res = await getAllAuditLogs(params);
+        const paginatedData = res.data.data;
+        const incoming: AuditLogResponse[] = paginatedData.content ?? [];
+        setLogs((prev) => (currentPage === 0 ? incoming : [...prev, ...incoming]));
+        setHasMore(!paginatedData.last);
+        setTotalElements(paginatedData.totalElements ?? 0);
+        setPage(currentPage);
       } catch {
         setError("Failed to load audit logs.");
       } finally {
         setLoading(false);
+        setLoadingMore(false);
         setRefreshing(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [filters],
   );
 
+  // Initial load
   React.useEffect(() => {
-    fetchLogs();
+    fetchLogs({ reset: true });
   }, [fetchLogs]);
 
-  // All filtering (search, date, actionType) is handled server-side via request params
+  // Infinite scroll observer
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchLogs({ nextPage: page + 1 });
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, fetchLogs]);
+
+  const handleFiltersApply = (f: AuditFilters) => {
+    setFilters(f);
+    // filters change triggers fetchLogs via useCallback dep, reset to page 0
+    setLogs([]);
+    setPage(0);
+  };
+
+  // All filtering is handled server-side
   const filtered = logs;
 
   const activeFilterCount = [
@@ -476,7 +517,7 @@ export default function AuditLogsPage() {
             variant="outline"
             size="icon"
             className="h-9 w-9 shrink-0"
-            onClick={() => fetchLogs(true, filters)}
+            onClick={() => fetchLogs({ refresh: true, reset: true })}
             disabled={refreshing || loading}
             title="Refresh"
           >
@@ -534,23 +575,20 @@ export default function AuditLogsPage() {
         <div className="text-center py-12 text-sm text-destructive border border-dashed border-destructive/30 rounded-xl">
           {error}
           <div className="mt-3">
-            <Button variant="outline" size="sm" onClick={() => fetchLogs()}>
+            <Button variant="outline" size="sm" onClick={() => fetchLogs({ reset: true })}>
               Retry
             </Button>
           </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-          {logs.length === 0
-            ? "No audit logs found."
-            : "No logs match your filters."}
+          No audit logs found.
         </div>
       ) : (
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground px-2">
-            {filtered.length} log{filtered.length !== 1 ? "s" : ""}
-            {logs.length !== filtered.length ? ` of ${logs.length}` : ""} — tap
-            any row to expand details
+            {totalElements} log{totalElements !== 1 ? "s" : ""} — tap any row
+            to expand details
           </p>
           <div className="flex flex-col">
             <AnimatePresence>
@@ -559,6 +597,13 @@ export default function AuditLogsPage() {
               ))}
             </AnimatePresence>
           </div>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
       )}
 
@@ -566,8 +611,8 @@ export default function AuditLogsPage() {
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
         filters={filters}
-        onApply={setFilters}
-        onClear={() => setFilters(EMPTY_FILTERS)}
+        onApply={handleFiltersApply}
+        onClear={() => { setLogs([]); setPage(0); setFilters(EMPTY_FILTERS); }}
       />
     </div>
   );

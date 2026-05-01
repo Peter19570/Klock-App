@@ -135,7 +135,7 @@ export { flushOfflineQueue as flushOfflineClockInQueue } from './syncEngine';
 // ─── Audit logs (SUPER_ADMIN only) ────────────────────────────────────────────
 
 export const getAllAuditLogs = (params?: Record<string, string>) =>
-  api.get<ApiResponse<AuditLogResponse[]>>('/api/v1/audit', { params });
+  api.get<ApiResponse<PageResponse<AuditLogResponse>>>('/api/v1/audit', { params });
 
-export const getUserAuditLogs = (userId: number) =>
-  api.get<ApiResponse<AuditLogResponse[]>>(`/api/v1/audit/${userId}`);
+export const getUserAuditLogs = (userId: number, params?: Record<string, string>) =>
+  api.get<ApiResponse<PageResponse<AuditLogResponse>>>(`/api/v1/audit/${userId}`, { params });

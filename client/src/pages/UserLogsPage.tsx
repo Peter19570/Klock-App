@@ -308,41 +308,92 @@ function LogFilterModal({ open, onClose, filters, onApply, onClear }: LogFilterM
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20;
+
 export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps) {
-  const [allLogs, setAllLogs]     = React.useState<AuditLogResponse[]>([]);
-  const [loading, setLoading]     = React.useState(true);
-  const [error, setError]         = React.useState('');
-  const [filters, setFilters]     = React.useState<LogFilters>(EMPTY_FILTERS);
-  const [filterOpen, setFilterOpen] = React.useState(false);
-  const [search, setSearch]       = React.useState('');
+  const [logs, setLogs]               = React.useState<AuditLogResponse[]>([]);
+  const [loading, setLoading]         = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [error, setError]             = React.useState('');
+  const [filters, setFilters]         = React.useState<LogFilters>(EMPTY_FILTERS);
+  const [filterOpen, setFilterOpen]   = React.useState(false);
+  const [search, setSearch]           = React.useState('');
+  const [page, setPage]               = React.useState(0);
+  const [hasMore, setHasMore]         = React.useState(false);
+  const [totalElements, setTotalElements] = React.useState(0);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+  const fetchLogs = React.useCallback(
+    async (opts: { reset?: boolean; overrideFilters?: LogFilters; overrideSearch?: string; nextPage?: number } = {}) => {
+      const { reset = false, overrideFilters, overrideSearch, nextPage } = opts;
+      if (reset || nextPage === undefined) setLoading(true);
+      else setLoadingMore(true);
+      setError('');
+      try {
+        const f = overrideFilters ?? filters;
+        const s = overrideSearch !== undefined ? overrideSearch : search;
+        const currentPage = nextPage ?? 0;
+        const params: Record<string, string> = {
+          page: String(currentPage),
+          size: String(PAGE_SIZE),
+        };
+        if (f.date) params.date = f.date;
+        if (f.actionType) params.auditOption = f.actionType;
+        if (s.trim()) params.search = s.trim();
+        const res = await getUserAuditLogs(userId, params);
+        const paginatedData = res.data.data;
+        const incoming: AuditLogResponse[] = paginatedData.content ?? [];
+        setLogs((prev) => (currentPage === 0 ? incoming : [...prev, ...incoming]));
+        setHasMore(!paginatedData.last);
+        setTotalElements(paginatedData.totalElements ?? 0);
+        setPage(currentPage);
+      } catch {
+        setError('Failed to load audit logs.');
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userId, filters, search],
+  );
 
   React.useEffect(() => {
-    setLoading(true);
-    setError('');
-    getUserAuditLogs(userId)
-      .then((res) => setAllLogs(res.data.data ?? []))
-      .catch(() => setError('Failed to load audit logs.'))
-      .finally(() => setLoading(false));
-  }, [userId]);
+    fetchLogs({ reset: true });
+  }, [fetchLogs]);
 
-  const logs = React.useMemo(() => {
-    let result = allLogs;
-    if (filters.date) {
-      result = result.filter((l) => l.createdAt.startsWith(filters.date));
-    }
-    if (filters.actionType) {
-      result = result.filter((l) => l.type === filters.actionType);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((l) => formatDate(l.createdAt).toLowerCase().includes(q));
-    }
-    return result;
-  }, [allLogs, filters, search]);
+  // Infinite scroll observer
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchLogs({ nextPage: page + 1 });
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, page, fetchLogs]);
+
+  const handleFiltersApply = (f: LogFilters) => {
+    setLogs([]);
+    setPage(0);
+    setFilters(f);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setLogs([]);
+    setPage(0);
+  };
 
   const activeFilterCount = [
     filters.date !== '',
     filters.actionType !== '',
+    search !== '',
   ].filter(Boolean).length;
 
   const removeChip = (key: keyof LogFilters) =>
@@ -396,7 +447,7 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
             <Input
               placeholder="Search…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 h-9 text-sm"
             />
           </div>
@@ -450,12 +501,12 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
         </div>
       ) : logs.length === 0 ? (
         <div className="text-center py-16 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-          {allLogs.length === 0 ? 'No audit logs found for this user.' : 'No logs match your filters.'}
+          {totalElements === 0 ? 'No audit logs found for this user.' : 'No logs match your filters.'}
         </div>
       ) : (
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground px-2">
-            {logs.length} log{logs.length !== 1 ? 's' : ''}{allLogs.length !== logs.length ? ` of ${allLogs.length}` : ''} — tap any row to expand details
+            {totalElements} log{totalElements !== 1 ? 's' : ''} — tap any row to expand details
           </p>
           <div className="flex flex-col">
             <AnimatePresence>
@@ -464,6 +515,13 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
               ))}
             </AnimatePresence>
           </div>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
       )}
 
@@ -471,8 +529,8 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
         filters={filters}
-        onApply={setFilters}
-        onClear={() => setFilters(EMPTY_FILTERS)}
+        onApply={handleFiltersApply}
+        onClear={() => { setLogs([]); setPage(0); setFilters(EMPTY_FILTERS); }}
       />
     </div>
   );

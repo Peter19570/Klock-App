@@ -13,20 +13,37 @@ async function getDeviceId(): Promise<string> {
   if (stored) return stored;
   const ua = navigator.userAgent + navigator.language + screen.width + screen.height;
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ua));
-  const id = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  const id = Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
   localStorage.setItem("klock_device_id", id);
   return id;
 }
 
 /**
- * Only registers the device if the user's deviceId is null in the /me response.
+ * Returns true if the user has no device registered yet.
+ * The backend sets deviceId to the string "not set" when unregistered,
+ * but we also guard against null/undefined for safety.
+ */
+function deviceIsUnset(deviceId: UserDetailResponse["deviceId"]): boolean {
+  return deviceId == null || deviceId === "NOT SET";
+}
+
+/**
+ * Only registers the device if the user's deviceId is unset.
  * Fires silently in the background — non-fatal if it fails.
+ * Shows a brief browser notification on success if permission is granted.
  */
 async function registerDeviceIfNeeded(userData: UserDetailResponse): Promise<void> {
-  if (userData.deviceId != null) return;
+  if (!deviceIsUnset(userData.deviceId)) return;
   try {
     const deviceId = await getDeviceId();
     await api.post("/api/v1/auth/device", { deviceId });
+    // Optional: non-disruptive success notification via the Notifications API
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("Klock", { body: "Device registered successfully.", silent: true });
+    }
   } catch (err) {
     console.warn("Device registration failed (non-fatal):", err);
   }
@@ -87,7 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = "/dashboard";
   };
 
-  // FIXED: /api/auth/v1/login → /api/v1/auth/login
   const login = async (data: AuthRequest) => {
     const res = await api.post<{ data: { accessToken: string; refreshToken: string } }>(
       "/api/v1/auth/login",
@@ -97,12 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenStore.save(accessToken, refreshToken);
     const userData = await fetchUser();
     if (userData) {
-      registerDeviceIfNeeded(userData); // fire-and-forget
+      await registerDeviceIfNeeded(userData);
       handleHardRedirect(userData);
     }
   };
 
-  // FIXED: /api/auth/logout → /api/v1/auth/logout
   const logout = async () => {
     const refreshToken = tokenStore.getRefresh();
     setUser(null);
