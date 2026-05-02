@@ -9,5 +9,6 @@ public record UserResponse(
         String picture,
         UserRole role,
         String homeBranchName,
-        Double avgEntryProximityDistance
+        Double avgEntryProximityDistance,
+        String phone
 ) {}

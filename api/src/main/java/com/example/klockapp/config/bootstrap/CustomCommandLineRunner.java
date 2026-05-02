@@ -32,6 +32,9 @@ public class CustomCommandLineRunner {
     @Value("${app.user.default.picture}")
     private String profile;
 
+    @Value("${app.user.admin.phone}")
+    private String phone;
+
     @Bean
     public CommandLineRunner commandLineRunner(){
         return args -> {
@@ -48,6 +51,7 @@ public class CustomCommandLineRunner {
             user.setPicture(profile);
             user.setRole(UserRole.SUPER_ADMIN);
             user.setMustChangePassword(false);
+            user.setPhone(phone);
             userRepo.save(user);
 
             System.out.println("New Super Admin Created !");

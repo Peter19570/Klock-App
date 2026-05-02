@@ -36,10 +36,13 @@ public class Branch extends BaseEntity {
     @Column(nullable = false)
     private LocalTime shiftEnd;
 
-    private Long autoClockOutDuration; // Minutes
+    @Column(length = 15)
+    private String support;
+
+    private Long autoClockOutDuration; // seconds
 
     @Enumerated(EnumType.STRING)
-    private BranchStatus branchStatus = BranchStatus.UNLOCKED; // Super Admin override
+    private BranchStatus branchStatus = BranchStatus.UNLOCKED;
 
     @OneToMany(mappedBy = "homeBranch")
     private List<User> assignedStaff = new ArrayList<>();

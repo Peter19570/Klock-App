@@ -19,6 +19,10 @@ public record BranchDetailsResponse(
         Double avgDistance,
         double displayAvg,
         String status,
+        String support,
+
+        // Admins to specified branch
+        List<UserResponse> admins,
 
         // Summary Stats
         long totalAssignedStaff,
@@ -26,5 +30,5 @@ public record BranchDetailsResponse(
 
         // The Lists
         List<UserResponse> assignedStaff, // People whose homeBranch is this
-        List<UserResponse> activeNow      // People physically at this branch right now [cite: 25, 29]
+        List<UserResponse> activeNow      // People physically at this branch right now
 ) {}

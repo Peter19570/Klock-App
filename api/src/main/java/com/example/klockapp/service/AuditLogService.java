@@ -1,6 +1,7 @@
 package com.example.klockapp.service;
 
 import com.example.klockapp.dto.response.AuditLogResponse;
+import com.example.klockapp.enums.AuditOption;
 import com.example.klockapp.filter.AuditLogFilter;
 import com.example.klockapp.mapper.AuditLogMapper;
 import com.example.klockapp.model.AuditLog;
@@ -10,9 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
@@ -21,6 +23,17 @@ public class AuditLogService {
 
     private final AuditLogRepo auditLogRepo;
     private final AuditLogMapper auditLogMapper;
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createAudit(String fullName, Long userId, AuditOption type, Map<String, Object> auditInfo){
+        AuditLog auditLog = AuditLog.builder()
+                .fullName(fullName)
+                .userId(userId)
+                .type(type)
+                .auditInfo(auditInfo)
+                .build();
+        auditLogMapper.toDto(auditLogRepo.save(auditLog));
+    }
 
     /**
      * Get all logs in the database

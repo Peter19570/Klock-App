@@ -6,7 +6,6 @@ import com.example.klockapp.dto.request.ClockOutRequest;
 import com.example.klockapp.dto.response.ClockEventResponse;
 import com.example.klockapp.dto.response.SessionResponse;
 import com.example.klockapp.enums.*;
-import com.example.klockapp.exception.custom.ExpiredClockInRequestException;
 import com.example.klockapp.exception.custom.NotFoundException;
 import com.example.klockapp.exception.custom.WriteToCSVException;
 import com.example.klockapp.filter.SessionFilter;
@@ -21,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.coyote.BadRequestException;
-import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,10 +43,10 @@ public class AttendanceService {
 
     private final WorkSessionRepo workSessionRepo;
     private final ClockEventRepo clockEventRepo;
-    private final AuditLogRepo auditLogRepo;
     private final BranchRepo branchRepo;
     private final WorkSessionMapper sessionMapper;
     private final ClockEventMapper clockEventMapper;
+    private final AuditLogService auditLogService;
 
     /**
      * Smart Clock-In Logic
@@ -106,16 +104,15 @@ public class AttendanceService {
 
         // Prevent user clock-in with a different device
         if (!(user.getDeviceId().equals(request.deviceId()))){
-            AuditLog auditLog = AuditLog.builder()
-                    .fullName(user.getFullName())
-                    .userId(user.getId())
-                    .type(AuditOption.DIFFERENT_DEVICE_DETECT)
-                    .auditInfo(Map.of(
+            auditLogService.createAudit(
+                    user.getFullName(),
+                    user.getId(),
+                    AuditOption.DIFFERENT_DEVICE_DETECT,
+                    Map.of(
                             "savedDeviceId", user.getDeviceId(),
-                            "clockInDeviceId", request.deviceId()
-                    ))
-                    .build();
-            auditLogRepo.save(auditLog);
+                            "clockInDeviceId", request.deviceId())
+            );
+
             throw new BadRequestException("Saved device ID does not match current device ID");
         }
 
@@ -148,8 +145,7 @@ public class AttendanceService {
         session.setStatus(SessionStatus.ACTIVE);
 
         // Log to the database, Super admins will have access to this data
-        AuditLog auditLog = getAuditLog(user, request);
-        auditLogRepo.save(auditLog);
+        clockInSuccessAuditLog(user, request);
 
         return clockEventMapper.toDto(clockEventRepo.save(event));
     }
@@ -174,17 +170,16 @@ public class AttendanceService {
 
         // Logs suspicious clock-outs
         if (distance > 100){
-            AuditLog auditLog = AuditLog.builder()
-                    .fullName(user.getFullName())
-                    .userId(user.getId())
-                    .type(AuditOption.SUSPICIOUS_CLOCK_OUT)
-                    .auditInfo(Map.of(
+            auditLogService.createAudit(
+                    user.getFullName(),
+                    user.getId(),
+                    AuditOption.SUSPICIOUS_CLOCK_OUT,
+                    Map.of(
                             "latitude", request.latitude(),
                             "longitude", request.longitude(),
                             "distanceBetweenClockEvents", distance
-                    ))
-                    .build();
-            auditLogRepo.save(auditLog);
+                    )
+            );
         }
 
         // Duration that flags clock-event
@@ -196,16 +191,14 @@ public class AttendanceService {
             clockEventRepo.delete(activeEvent);
             session.setStatus(SessionStatus.COMPLETED);
 
-            AuditLog auditLog = AuditLog.builder()
-                    .fullName(user.getFullName())
-                    .userId(user.getId())
-                    .type(AuditOption.AMBIGUOUS_CLOCK_EVENT)
-                    .auditInfo(Map.of(
-                            "clock-event-duration", eventDiff
-                    ))
-                    .build();
+            auditLogService.createAudit(
+                    user.getFullName(),
+                    user.getId(),
+                    AuditOption.AMBIGUOUS_CLOCK_EVENT,
+                    Map.of(
+                            "clock-event-duration", eventDiff)
+            );
 
-            auditLogRepo.save(auditLog);
             return null;
         }
 
@@ -215,19 +208,17 @@ public class AttendanceService {
                 request.clockOutType() : ClockOutType.MANUAL);
 
         // Log clock-out event
-        AuditLog auditLog = AuditLog.builder()
-                .fullName(user.getFullName())
-                .userId(user.getId())
-                .type(AuditOption.CLOCK_OUT_SUCCESS)
-                .auditInfo(Map.of(
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.CLOCK_OUT_SUCCESS,
+                Map.of(
                         "latitude", request.latitude(),
                         "longitude", request.longitude(),
                         "clockOutType", request.clockOutType(),
                         "distanceBetweenClockEvents", distance,
-                        "totalDistanceCovered", session.getTotalDistanceCovered()
-                ))
-                .build();
-        auditLogRepo.save(auditLog);
+                        "totalDistanceCovered", session.getTotalDistanceCovered())
+        );
 
         session.setStatus(SessionStatus.COMPLETED);
         return clockEventMapper.toDto(clockEventRepo.save(activeEvent));
@@ -344,9 +335,10 @@ public class AttendanceService {
     }
 
     /**
-     * Helper to log the details of the clock-event
-     * */
-    private static @NonNull AuditLog getAuditLog(User user, ClockInRequest request) {
+     * Helper to log the details of the clock in-event
+     *
+     */
+    private void clockInSuccessAuditLog(User user, ClockInRequest request) {
         int signalValue;
 
         if (request.signalStrength() == null){
@@ -355,11 +347,11 @@ public class AttendanceService {
             signalValue = request.signalStrength();;
         }
 
-        return AuditLog.builder()
-                .fullName(user.getFullName())
-                .userId(user.getId())
-                .type(AuditOption.CLOCK_IN_SUCCESS)
-                .auditInfo(Map.of(
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.CLOCK_IN_SUCCESS,
+                Map.of(
                         "deviceId", request.deviceId(),
                         "batteryLevel", request.batteryLevel(),
                         "signalStrength", signalValue,
@@ -369,8 +361,7 @@ public class AttendanceService {
                         "isDelayedSync", request.isDelaySync(),
                         "latitude", request.latitude(),
                         "longitude", request.longitude())
-                )
-                .build();
+        );
     }
 
     /**

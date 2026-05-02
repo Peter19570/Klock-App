@@ -1,5 +1,6 @@
 package com.example.klockapp.service;
 
+import com.example.klockapp.enums.AuditOption;
 import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.UserCreationRequest;
 import com.example.klockapp.dto.request.UserUpdateRequest;
@@ -23,6 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -32,6 +35,7 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final BranchRepo branchRepo;
+    private final AuditLogService auditLogService;
 
     @Value("${app.user.default.picture}")
     private String defaultPicture;
@@ -85,9 +89,17 @@ public class UserService {
     public void transferUser(Long userId, Long newBranchId) {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        Branch newBranch = branchRepo.getReferenceById(newBranchId);
 
-        // This logic would involve finding the branch and setting it as the new homeBranch
-        user.setHomeBranch(branchRepo.getReferenceById(newBranchId));
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.USER_UPDATED,
+                Map.of("message", "User has been transferred from " +
+                        user.getHomeBranch().getDisplayName() + " to " + newBranch.getDisplayName())
+        );
+
+        user.setHomeBranch(newBranch);
         userRepo.save(user);
     }
 
@@ -108,6 +120,11 @@ public class UserService {
             throw new IllegalStateException("Email already registered.");
         }
 
+        if (UserRole.ADMIN.equals(request.userRole())
+                || UserRole.SUPER_ADMIN.equals(request.userRole()) && null == request.phone()){
+            throw new IllegalStateException("Admins and Super Admins must have phone not null");
+        }
+
         Branch branch = branchRepo.findById(request.managedBranchId())
                 .orElseThrow(() -> new NotFoundException("Target Branch not found."));
 
@@ -115,7 +132,15 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.firstName().toLowerCase() + "@12345"));
         user.setRole(request.userRole());
         user.setPicture(defaultPicture);
-        user.setHomeBranch(branch);    // This is the branch they manage
+        user.setPhone(request.phone());
+        user.setHomeBranch(branch);
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.USER_CREATED,
+                Map.of("message", "User created successfully.")
+        );
 
         return userMapper.toDetailDto(userRepo.save(user));
     }
@@ -127,6 +152,19 @@ public class UserService {
     public UserDetailResponse updateUser(UserUpdateRequest request, Long id){
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+
+        if (UserRole.ADMIN.equals(request.userRole())
+                || UserRole.SUPER_ADMIN.equals(request.userRole()) && null == request.phone()){
+            throw new IllegalStateException("Admins and Super Admins must have phone not null");
+        }
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.USER_UPDATED,
+                Map.of("message", "User info updated successfully.")
+        );
+
         userMapper.updateEntityFromDto(request, user);
         return userMapper.toDetailDto(user);
     }
@@ -140,12 +178,30 @@ public class UserService {
                 .orElseThrow(() -> new NotFoundException("User not found"));
         user.setPassword(passwordEncoder.encode(user.getFirstName().toLowerCase()  + "@12345"));
         user.setMustChangePassword(true);
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.PASSWORD_RESET,
+                Map.of("message", "User password reset successfully.")
+        );
     }
 
+    /**
+     * Set user's device ID to null, next login captures the new device ID
+     * */
     @Transactional
     public void resetUserDeviceId(Long id){
         User user = userRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         user.setDeviceId("NOT SET");
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.DEVICE_ID_RESET,
+                Map.of("message", "User device ID reset successfully.")
+        );
     }
+
 }

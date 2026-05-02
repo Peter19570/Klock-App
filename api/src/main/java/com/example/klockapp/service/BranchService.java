@@ -1,5 +1,7 @@
 package com.example.klockapp.service;
 
+import com.example.klockapp.enums.AuditOption;
+import com.example.klockapp.enums.UserRole;
 import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.BranchRequest;
 import com.example.klockapp.dto.request.BranchStatusRequest;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -35,6 +38,7 @@ public class BranchService {
     private final ClockEventRepo clockEventRepo;
     private final BranchMapper branchMapper;
     private final UserMapper userMapper;
+    private final AuditLogService auditLogService;
 
     /**
      * Super Admin: Creates a new office location.
@@ -46,6 +50,9 @@ public class BranchService {
         return getBranchDetails(savedBranch.getId());
     }
 
+    /**
+     * Get Paginated List of branches
+     * */
     public Page<BranchResponse> getAllBranches(Pageable pageable) {
         return branchRepo.findAll(pageable)
                 .map(branchMapper::toDto);
@@ -73,6 +80,12 @@ public class BranchService {
 
         Double avgDistance = clockEventRepo.getAverageClockInDistanceForBranch(branchId);
 
+        // Get all admins to the current branch
+        List<UserResponse> admins = userRepo.findAllByHomeBranchIdAndRole(branchId, UserRole.ADMIN)
+                .stream()
+                .map(userMapper::toDto)
+                .toList();
+
         // If no one has clocked in yet, default to 0.0
         double displayAvg = (avgDistance != null) ? avgDistance : 0.0;
 
@@ -93,6 +106,8 @@ public class BranchService {
                 avgDistance,
                 displayAvg,
                 status,
+                branch.getSupport(),
+                admins,
                 assignedStaff.size(), // totalAssignedStaff
                 activeNow.size(),     // currentActiveCount
                 assignedStaff,
@@ -130,7 +145,7 @@ public class BranchService {
      * Used when changing coordinates, display names, or global settings.
      */
     @Transactional
-    public BranchDetailsResponse updateBranch(Long id, BranchRequest request) {
+    public BranchDetailsResponse updateBranch(Long id, BranchRequest request, User user) {
         Branch branch = branchRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Branch not found"));
 
@@ -139,6 +154,14 @@ public class BranchService {
 
         // Save and return the detailed dashboard view
         Branch updatedBranch = branchRepo.save(branch);
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.BRANCH_INFO_UPDATED,
+                Map.of("message", "Branch info edited")
+        );
+
         return getBranchDetails(updatedBranch.getId());
     }
 
@@ -159,10 +182,21 @@ public class BranchService {
             throw new AccessDeniedException("This branch configuration is locked by Super Admin");
         }
 
+
+        auditLogService.createAudit(
+                principal.user().getFullName(),
+                principal.user().getId(),
+                AuditOption.BRANCH_INFO_UPDATED,
+                Map.of("message", "Branch radius changed from " + branch.getRadius() + " to " + newRadius)
+        );
+
         branch.setRadius(newRadius);
         return getBranchDetails(branchRepo.save(branch).getId());
     }
 
+    /**
+     * Delete a specified Branch
+     * */
     @Transactional
     public void deleteBranch(Long branchId) {
         Branch branch = branchRepo.findById(branchId)
@@ -175,10 +209,20 @@ public class BranchService {
         branchRepo.deleteById(branch.getId());
     }
 
+    /**
+     * Change status of Branch, LOCKED or UNLOCKED
+     * */
     @Transactional
-    public void setBranchStatus(BranchStatusRequest request, Long id){
+    public void setBranchStatus(BranchStatusRequest request, Long id, User user){
         Branch branch = branchRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Branch not found"));
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.BRANCH_INFO_UPDATED,
+                Map.of("message", "Branch status changed to " + request.branchStatus())
+        );
 
         branch.setBranchStatus(request.branchStatus());
         branchRepo.save(branch);

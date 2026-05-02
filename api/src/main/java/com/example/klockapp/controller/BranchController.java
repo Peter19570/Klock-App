@@ -70,8 +70,10 @@ public class BranchController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BranchDetailsResponse>> updateBranch(
             @PathVariable Long id,
-            @RequestBody BranchRequest request) {
-        return ResponseEntity.ok(new ApiResponse<>("Branch updated", branchService.updateBranch(id, request)));
+            @RequestBody BranchRequest request,
+            @AuthenticationPrincipal CustomUserPrincipal principal) {
+        return ResponseEntity.ok(new ApiResponse<>("Branch updated",
+                branchService.updateBranch(id, request, principal.user())));
     }
 
     /**
@@ -111,8 +113,9 @@ public class BranchController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Void> setBranchStatus(
             @RequestBody @Valid BranchStatusRequest request,
-            @PathVariable Long id){
-        branchService.setBranchStatus(request, id);
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserPrincipal principal){
+        branchService.setBranchStatus(request, id, principal.user());
         return ResponseEntity.noContent().build();
     }
 }

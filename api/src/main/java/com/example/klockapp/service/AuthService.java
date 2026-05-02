@@ -1,6 +1,9 @@
 package com.example.klockapp.service;
 
 import com.example.klockapp.config.security.jwt.JwtService;
+import com.example.klockapp.enums.AuditOption;
+import com.example.klockapp.model.AuditLog;
+import com.example.klockapp.repo.AuditLogRepo;
 import com.example.klockapp.shared.dto.response.CustomUserPrincipal;
 import com.example.klockapp.dto.request.AuthRequest;
 import com.example.klockapp.dto.request.DeviceIdRequest;
@@ -21,6 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -31,6 +36,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenRepo tokenRepo;
+    private final AuditLogService auditLogService;
 
 
     public AuthResponse login(AuthRequest request) {
@@ -47,6 +53,13 @@ public class AuthService {
         newRefreshToken.setToken(refreshToken);
         newRefreshToken.setUser(principal.user());
         tokenRepo.save(newRefreshToken);
+
+        auditLogService.createAudit(
+                principal.user().getFullName(),
+                principal.user().getId(),
+                AuditOption.LOGIN_SUCCESS,
+                Map.of("message", "User successfully logged in")
+        );
 
         return new AuthResponse(accessToken, refreshToken);
     }
@@ -97,6 +110,12 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setMustChangePassword(false);
         userRepo.save(user);
+
+        auditLogService.createAudit(
+                user.getFullName(),
+                user.getId(),
+                AuditOption.PASSWORD_RESET,
+                Map.of("message", "User successfully reset password"));
     }
 
     // Method to take device ID on first log in

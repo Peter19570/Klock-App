@@ -6,6 +6,7 @@ public record UserUpdateRequest(
         String email,
         String firstName,
         String lastName,
-        UserRole userRole
+        UserRole userRole,
+        String phone
 ) {
 }

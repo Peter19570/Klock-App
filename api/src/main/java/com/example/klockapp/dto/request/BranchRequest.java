@@ -12,5 +12,6 @@ public record BranchRequest(
         Double radius,
         Long autoClockOutDuration,
         LocalTime shiftStart,
-        LocalTime shiftEnd
-        ) {}
+        LocalTime shiftEnd,
+        String support
+) {}

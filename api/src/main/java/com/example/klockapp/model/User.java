@@ -26,22 +26,16 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private String password;
 
-    @Column
     private String firstName;
-
-    @Column
     private String lastName;
-
-    @Column
     private String fullName;
-
-    @Column
     private String picture;
 
-    @Column
+    @Column(length = 15)
+    private String phone;
+
     private String deviceId = "NOT SET";
 
-    @Column
     private Boolean mustChangePassword = true;
 
     @Formula("(SELECT AVG(ce.entry_proximity_distance) FROM clock_events ce WHERE ce.user_id = id)")
