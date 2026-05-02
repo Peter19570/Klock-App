@@ -120,8 +120,9 @@ public class UserService {
             throw new IllegalStateException("Email already registered.");
         }
 
-        if (UserRole.ADMIN.equals(request.userRole())
-                || UserRole.SUPER_ADMIN.equals(request.userRole()) && null == request.phone()){
+        if ((UserRole.ADMIN.equals(request.userRole())
+                || UserRole.SUPER_ADMIN.equals(request.userRole()))
+                && request.phone() == null) {
             throw new IllegalStateException("Admins and Super Admins must have phone not null");
         }
 

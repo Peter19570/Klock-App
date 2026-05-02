@@ -3,7 +3,7 @@ import * as ReactDOM from 'react-dom';
 import {
   ArrowLeft, Loader2,
   LogIn, LogOut, AlertTriangle, Smartphone, ShieldAlert, HelpCircle,
-  Clock, ChevronDown, SlidersHorizontal, X, Search, CalendarDays,
+  Clock, ChevronDown, ChevronUp, SlidersHorizontal, X, Search, CalendarDays,
   UserCheck, UserPlus, UserCog, KeyRound, RotateCcw, Building2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -365,6 +365,13 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
   const [hasMore, setHasMore]         = React.useState(false);
   const [totalElements, setTotalElements] = React.useState(0);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = React.useState(false);
+
+  React.useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const fetchLogs = React.useCallback(
     async (opts: { reset?: boolean; overrideFilters?: LogFilters; overrideSearch?: string; nextPage?: number } = {}) => {
@@ -575,6 +582,23 @@ export default function UserLogsPage({ userId, user, onBack }: UserLogsPageProps
         onApply={handleFiltersApply}
         onClear={() => { setLogs([]); setPage(0); setFilters(EMPTY_FILTERS); }}
       />
+
+      {/* Scroll-to-top button */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="fixed bottom-6 right-6 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:scale-95 transition-transform"
+            aria-label="Scroll to top"
+          >
+            <ChevronUp className="h-5 w-5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

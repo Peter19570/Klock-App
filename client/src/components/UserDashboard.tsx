@@ -646,15 +646,23 @@ export function UserDashboard() {
     ? 'Clock-in saved offline — will sync when back online.'
     : 'You are not clocked in.';
 
+  // ─── Time-based greeting ─────────────────────────────────────────────────
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  })();
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-8 pb-8 space-y-8">
       <SplashedPushNotifications ref={toastRef} />
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-          Welcome, {user?.firstName} {user?.lastName} 👋
+        <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-foreground truncate">
+          {greeting}, {user?.firstName} {user?.lastName} 👋
         </h1>
         <p className="text-muted-foreground mt-1">{statusLabel}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
