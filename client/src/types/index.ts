@@ -29,6 +29,8 @@ export interface UserDetailResponse {
   homeBranchName: string;
   createdAt: string;
   mustChangePassword?: boolean;
+  /** Contact phone number — required for ADMIN and SUPER_ADMIN roles */
+  phone?: string | null;
 }
 
 /** Compact user reference used inside branch/session payloads */
@@ -41,6 +43,8 @@ export interface UserResponse {
   role?: UserRole;
   /** Average distance (metres) from branch at clock-in across all sessions */
   avgEntryProximityDistance?: number | null;
+  /** Contact phone number — present on admin/super-admin entries */
+  phone?: string | null;
 }
 
 // ─── Admin user update ────────────────────────────────────────────────────────
@@ -58,6 +62,8 @@ export interface UserCreationRequest {
   lastName: string;
   managedBranchId?: number;
   userRole: UserRole;
+  /** Required when userRole is ADMIN or SUPER_ADMIN */
+  phone?: string;
 }
 
 // ─── Branches ─────────────────────────────────────────────────────────────────
@@ -70,6 +76,8 @@ export interface BranchRequest {
   autoClockOutDuration?: number;
   shiftStart?: string;
   shiftEnd?: string;
+  /** Support contact phone number for this branch */
+  support?: string;
 }
 
 /** POST /api/v1/branches/status/{id} */
@@ -99,6 +107,8 @@ export interface BranchResponse {
   totalAssignedStaff?: number;
   /** Present in dashboard payload and GET /api/v1/branches list */
   currentActiveCount?: number;
+  /** Support contact phone number for this branch */
+  support?: string | null;
 }
 
 export interface BranchDetailsResponse {
@@ -121,6 +131,10 @@ export interface BranchDetailsResponse {
   currentActiveCount: number;
   assignedStaff: UserResponse[];
   activeNow: UserResponse[];
+  /** Support contact phone number for this branch */
+  support?: string | null;
+  /** Admins assigned to manage this branch */
+  admins?: UserResponse[];
 }
 
 // ─── Sessions & Movements ─────────────────────────────────────────────────────

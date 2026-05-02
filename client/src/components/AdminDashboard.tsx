@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, Clock, GitBranch, Plus, Trash2, Loader2,
   Lock, Unlock, X, MapPin, ChevronRight, ArrowLeft, Maximize2,
   Minimize2, Menu, ArrowUp, Users2, RefreshCw, ShieldCheck, MoreVertical,
+  Phone,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -32,6 +33,7 @@ import {
   getBranchDetails,
   setBranchStatus,
 } from '../services/branchService';
+import { getMe } from '../services/userService';
 import type { BranchResponse, BranchRequest, BranchDetailsResponse } from '../types';
 
 type TabId = 'overview' | 'dashboard' | 'users' | 'sessions' | 'branch' | 'branches' | 'logs';
@@ -44,6 +46,7 @@ interface BranchFormState {
   autoClockOutDuration: string;
   shiftStart: string;
   shiftEnd: string;
+  support: string;
 }
 
 const emptyForm = (): BranchFormState => ({
@@ -54,6 +57,7 @@ const emptyForm = (): BranchFormState => ({
   autoClockOutDuration: '',
   shiftStart: '',
   shiftEnd: '',
+  support: '',
 });
 
 function formToRequest(f: BranchFormState): BranchRequest {
@@ -65,6 +69,7 @@ function formToRequest(f: BranchFormState): BranchRequest {
     ...(f.autoClockOutDuration && { autoClockOutDuration: parseInt(f.autoClockOutDuration, 10) }),
     ...(f.shiftStart && { shiftStart: f.shiftStart }),
     ...(f.shiftEnd   && { shiftEnd:   f.shiftEnd }),
+    ...(f.support.trim() && { support: f.support.trim() }),
   };
 }
 
@@ -88,11 +93,25 @@ interface BranchFormModalProps {
 function BranchFormModal({ open, onClose, onSaved, notify }: BranchFormModalProps) {
   const [form, setForm] = useState<BranchFormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [fetchingContact, setFetchingContact] = useState(false);
 
   useEffect(() => { if (open) setForm(emptyForm()); }, [open]);
 
   const set = (key: keyof BranchFormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
+
+  const handleUseMyContact = async () => {
+    setFetchingContact(true);
+    try {
+      const res = await getMe();
+      const phone = res.data.data.phone ?? '';
+      setForm((prev) => ({ ...prev, support: phone }));
+    } catch {
+      notify('error', 'Could not fetch your contact number.');
+    } finally {
+      setFetchingContact(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!isFormValid(form)) return;
@@ -122,7 +141,7 @@ function BranchFormModal({ open, onClose, onSaved, notify }: BranchFormModalProp
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.18 }}
-        className="bg-card rounded-xl border border-border shadow-xl p-5 sm:p-6 w-full max-w-md"
+        className="bg-card rounded-xl border border-border shadow-xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-foreground">Create Branch</h2>
@@ -156,7 +175,6 @@ function BranchFormModal({ open, onClose, onSaved, notify }: BranchFormModalProp
             <Label className="text-sm">Auto clock-out delay <span className="text-muted-foreground font-normal">(minutes, optional)</span></Label>
             <Input placeholder="e.g. 30" type="number" min={1} value={form.autoClockOutDuration} onChange={set('autoClockOutDuration')} />
           </div>
-          {/* NEW: shift times */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-sm">Shift Start <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -166,6 +184,22 @@ function BranchFormModal({ open, onClose, onSaved, notify }: BranchFormModalProp
               <Label className="text-sm">Shift End <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input type="time" value={form.shiftEnd} onChange={set('shiftEnd')} className="h-9" />
             </div>
+          </div>
+          {/* Support contact */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Support Contact <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <button
+                type="button"
+                onClick={handleUseMyContact}
+                disabled={fetchingContact}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+              >
+                {fetchingContact ? <Loader2 className="h-3 w-3 animate-spin" /> : <Phone className="h-3 w-3" />}
+                Use My Contact
+              </button>
+            </div>
+            <Input placeholder="+234 800 000 0000" type="tel" value={form.support} onChange={set('support')} />
           </div>
         </div>
         <div className="flex gap-3 mt-6">
@@ -252,7 +286,7 @@ interface BranchDetailPageProps {
   notify: (type: 'success' | 'error', msg: string) => void;
 }
 
-type StaffTab = 'assigned' | 'active';
+type StaffTab = 'assigned' | 'active' | 'admins';
 
 function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageProps) {
   const [details, setDetails]               = useState<BranchDetailsResponse | null>(null);
@@ -302,6 +336,37 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
   };
 
   const staffList = (tab: StaffTab) => {
+    if (tab === 'admins') {
+      const list = details?.admins ?? [];
+      return list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">No admins assigned.</p>
+      ) : (
+        <div className="flex flex-col gap-2 overflow-y-auto max-h-72 pr-1">
+          {list.map((u) => (
+            <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+              <div className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-primary/10 text-primary">
+                {u.fullName?.charAt(0) ?? '?'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-foreground font-medium truncate text-xs">{u.fullName}</p>
+                <p className="text-muted-foreground truncate text-[10px]">{u.email}</p>
+              </div>
+              {u.phone && (
+                <a
+                  href={`tel:${u.phone}`}
+                  className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors shrink-0"
+                  title={u.phone}
+                >
+                  <Phone className="h-3 w-3" />
+                  <span className="hidden sm:inline">{u.phone}</span>
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     const list = tab === 'assigned' ? details?.assignedStaff : details?.activeNow;
     const emptyMsg = tab === 'assigned' ? 'No assigned staff.' : 'No one is currently active.';
     const avatarClass = tab === 'assigned' ? 'bg-primary/10 text-primary' : 'bg-emerald-500/20 text-emerald-600';
@@ -461,26 +526,48 @@ function BranchDetailPage({ branch, onBack, onSaved, notify }: BranchDetailPageP
         </AnimatePresence>
       </div>
 
-      {/* ── Staff Tabs — Assigned & Active Now ── */}
+      {/* ── Staff Tabs — Assigned / Active Now / Admins ── */}
       {details && (
         <div className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(0,0,0,0.05)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25)] overflow-hidden">
-          <div className="flex border-b border-border">
-            {(['assigned', 'active'] as StaffTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setStaffTab(tab)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-sm font-medium transition-colors relative ${staffTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {tab === 'assigned' ? <Users2 className="h-4 w-4" /> : <span className="w-2 h-2 rounded-full bg-emerald-500" />}
-                {tab === 'assigned' ? 'Assigned Staff' : 'Active Now'}
-                <span className={`inline-flex items-center justify-center h-4.5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${staffTab === tab ? (tab === 'assigned' ? 'bg-primary text-primary-foreground' : 'bg-emerald-500 text-white') : 'bg-muted text-muted-foreground'}`}>
-                  {tab === 'assigned' ? details.assignedStaff.length : details.activeNow.length}
-                </span>
-                {staffTab === tab && (
-                  <span className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-full ${tab === 'assigned' ? 'bg-primary' : 'bg-emerald-500'}`} />
-                )}
-              </button>
-            ))}
+          <div className="flex border-b border-border overflow-x-auto">
+            {(['assigned', 'active', 'admins'] as StaffTab[]).map((tab) => {
+              const count =
+                tab === 'assigned' ? details.assignedStaff.length
+                : tab === 'active' ? details.activeNow.length
+                : (details.admins?.length ?? 0);
+              const activeColor =
+                tab === 'assigned' ? 'bg-primary text-primary-foreground'
+                : tab === 'active' ? 'bg-emerald-500 text-white'
+                : 'bg-violet-500 text-white';
+              const barColor =
+                tab === 'assigned' ? 'bg-primary'
+                : tab === 'active' ? 'bg-emerald-500'
+                : 'bg-violet-500';
+              const label =
+                tab === 'assigned' ? 'Assigned'
+                : tab === 'active' ? 'Active Now'
+                : 'Admins';
+              const icon =
+                tab === 'assigned' ? <Users2 className="h-4 w-4" />
+                : tab === 'active' ? <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                : <ShieldCheck className="h-4 w-4" />;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setStaffTab(tab)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-colors relative whitespace-nowrap ${staffTab === tab ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {icon}
+                  {label}
+                  <span className={`inline-flex items-center justify-center min-w-[1.125rem] h-[1.125rem] px-1 rounded-full text-[10px] font-bold ${staffTab === tab ? activeColor : 'bg-muted text-muted-foreground'}`}>
+                    {count}
+                  </span>
+                  {staffTab === tab && (
+                    <span className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-full ${barColor}`} />
+                  )}
+                </button>
+              );
+            })}
           </div>
           <div className="p-4">{staffList(staffTab)}</div>
         </div>

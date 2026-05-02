@@ -24,6 +24,7 @@ export default function CreateAdminModal({
   const [email, setEmail] = React.useState('');
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName] = React.useState('');
+  const [phone, setPhone] = React.useState('');
   const [selectedBranchId, setSelectedBranchId] = React.useState<number | null>(null);
   const [selectedRole, setSelectedRole] = React.useState<UserRole>('ADMIN');
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
@@ -38,6 +39,7 @@ export default function CreateAdminModal({
       setEmail('');
       setFirstName('');
       setLastName('');
+      setPhone('');
       setSelectedBranchId(null);
       setSelectedRole('ADMIN');
       setError(null);
@@ -61,8 +63,13 @@ export default function CreateAdminModal({
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId);
 
+  const requiresPhone = selectedRole === 'ADMIN' || selectedRole === 'SUPER_ADMIN';
+  const requiresBranch = selectedRole !== 'SUPER_ADMIN';
+
   const handleSubmit = async () => {
-    if (!email.trim() || !firstName.trim() || !lastName.trim() || selectedBranchId === null) return;
+    if (!email.trim() || !firstName.trim() || !lastName.trim()) return;
+    if (requiresBranch && selectedBranchId === null) return;
+    if (requiresPhone && !phone.trim()) return;
     setSaving(true);
     setError(null);
     try {
@@ -70,8 +77,9 @@ export default function CreateAdminModal({
         email: email.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        managedBranchId: selectedBranchId,
+        ...(requiresBranch && selectedBranchId !== null ? { managedBranchId: selectedBranchId } : {}),
         userRole: selectedRole,
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
       });
       onCreated();
     } catch (err: unknown) {
@@ -88,11 +96,13 @@ export default function CreateAdminModal({
     email.trim().length > 0 &&
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    selectedBranchId !== null;
+    (!requiresBranch || selectedBranchId !== null) &&
+    (!requiresPhone || phone.trim().length > 0);
 
   const roles: { value: UserRole; label: string }[] = [
     { value: 'ADMIN', label: 'Admin' },
     { value: 'USER', label: 'User' },
+    { value: 'SUPER_ADMIN', label: 'Super Admin' },
   ];
 
   return ReactDOM.createPortal(
@@ -173,6 +183,26 @@ export default function CreateAdminModal({
                 />
               </div>
 
+              {/* Phone — required for ADMIN / SUPER_ADMIN */}
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-phone" className="text-sm">
+                  Phone
+                  {requiresPhone
+                    ? <span className="text-destructive ml-0.5">*</span>
+                    : <span className="text-muted-foreground font-normal"> (optional)</span>}
+                </Label>
+                <Input
+                  id="admin-phone"
+                  type="tel"
+                  placeholder="+234 800 000 0000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                {requiresPhone && (
+                  <p className="text-[11px] text-muted-foreground">Required for Admin and Super Admin roles.</p>
+                )}
+              </div>
+
               {/* Role selector */}
               <div className="space-y-1.5">
                 <Label className="text-sm">Role</Label>
@@ -211,7 +241,8 @@ export default function CreateAdminModal({
                 </div>
               </div>
 
-              {/* Branch selector */}
+              {/* Branch selector — not required for SUPER_ADMIN */}
+              {requiresBranch && (
               <div className="space-y-1.5">
                 <Label className="text-sm">Assign Branch</Label>
                 <div className="relative" ref={dropdownRef}>
@@ -257,6 +288,7 @@ export default function CreateAdminModal({
                   </AnimatePresence>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Actions */}

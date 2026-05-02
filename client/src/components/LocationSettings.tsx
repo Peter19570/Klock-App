@@ -1,12 +1,13 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { Lock, Unlock, Loader2, AlertTriangle, ChevronDown, BarChart2 } from "lucide-react";
+import { Lock, Unlock, Loader2, AlertTriangle, ChevronDown, BarChart2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AnimatePresence, motion } from "framer-motion";
 import { getBranchDetails, updateBranch } from "@/services/branchService";
+import { getMe } from "@/services/userService";
 import {
   SplashedPushNotifications,
   type SplashedPushNotificationsHandle,
@@ -54,6 +55,8 @@ export default function LocationSettings({
   const [displayName, setDisplayName] = React.useState("");
   const [shiftStart, setShiftStart]   = React.useState("");
   const [shiftEnd, setShiftEnd]       = React.useState("");
+  const [support, setSupport]         = React.useState("");
+  const [fetchingContact, setFetchingContact] = React.useState(false);
 
   const handleSaveRef = React.useRef<() => Promise<void>>(async () => {});
 
@@ -73,6 +76,7 @@ export default function LocationSettings({
         // Backend may send "HH:MM:SS" — strip seconds, keep "HH:MM" for the time input
         setShiftStart((detail.shiftStart ?? "").slice(0, 5));
         setShiftEnd((detail.shiftEnd ?? "").slice(0, 5));
+        setSupport(detail.support ?? "");
 
         // Lat/lng from BranchDetailsResponse (present in the GET /branches/{id} response)
         if (!hideCoordinates) {
@@ -91,6 +95,18 @@ export default function LocationSettings({
     setRadiusRaw(raw);
     const num = parseFloat(raw);
     if (!isNaN(num) && num > 0) onRadiusChange?.(num);
+  };
+
+  const handleUseMyContact = async () => {
+    setFetchingContact(true);
+    try {
+      const res = await getMe();
+      setSupport(res.data.data.phone ?? "");
+    } catch {
+      toastRef.current?.createNotification('error', 'Error', 'Could not fetch your contact number.');
+    } finally {
+      setFetchingContact(false);
+    }
   };
 
   const handleSave = React.useCallback(async () => {
@@ -121,6 +137,7 @@ export default function LocationSettings({
         autoClockOutDuration: isNaN(durationVal) ? undefined : durationVal,
         ...(shiftStart && { shiftStart }),
         ...(shiftEnd   && { shiftEnd }),
+        ...(support.trim() && { support: support.trim() }),
       });
 
       setOriginal((prev) =>
@@ -134,6 +151,7 @@ export default function LocationSettings({
               autoClockOutDuration: isNaN(durationVal) ? prev.autoClockOutDuration : durationVal,
               shiftStart: shiftStart || prev.shiftStart,
               shiftEnd:   shiftEnd   || prev.shiftEnd,
+              support:    support.trim() || prev.support,
             }
           : prev,
       );
@@ -149,7 +167,7 @@ export default function LocationSettings({
     } finally {
       setSaving(false);
     }
-  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, shiftStart, shiftEnd, unlocked, original, hideCoordinates, onSaved]);
+  }, [branchId, radiusRaw, durationRaw, latRaw, lngRaw, displayName, shiftStart, shiftEnd, support, unlocked, original, hideCoordinates, onSaved]);
 
   React.useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
 
@@ -398,6 +416,37 @@ export default function LocationSettings({
               className={`h-9 ${allReadOnly ? "opacity-60 cursor-not-allowed" : ""}`}
             />
           </div>
+        </div>
+
+        {/* Support contact */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="support" className="text-sm">
+              Support Contact <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            {!allReadOnly && (
+              <button
+                type="button"
+                onClick={handleUseMyContact}
+                disabled={fetchingContact}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+              >
+                {fetchingContact
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Phone className="h-3 w-3" />}
+                Use My Contact
+              </button>
+            )}
+          </div>
+          <Input
+            id="support"
+            type="tel"
+            placeholder="+234 800 000 0000"
+            value={support}
+            onChange={(e) => setSupport(e.target.value)}
+            disabled={allReadOnly}
+            className={allReadOnly ? "opacity-60 cursor-not-allowed" : ""}
+          />
         </div>
 
         {!allReadOnly && (
