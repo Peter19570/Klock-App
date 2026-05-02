@@ -5,6 +5,11 @@ import {
   Loader2,
   User,
   RefreshCw,
+  Mail,
+  Building2,
+  ShieldCheck,
+  CalendarDays,
+  Navigation,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -12,20 +17,153 @@ import { SessionHistory } from "@/components/SessionHistory";
 import { getUserSessionsById } from "@/services/sessionService";
 import type { SessionResponse, UserDetailResponse } from "@/types";
 
+// ─── Role label helper ─────────────────────────────────────────────────────────
+
+function roleLabel(role: string) {
+  if (role === "SUPER_ADMIN") return "Super Admin";
+  if (role === "ADMIN") return "Admin";
+  return "Employee";
+}
+
+function rolePillClass(role: string) {
+  if (role === "SUPER_ADMIN")
+    return "bg-amber-400/15 text-amber-500 border border-amber-400/30";
+  if (role === "ADMIN") return "bg-primary/15 text-primary";
+  return "bg-muted text-muted-foreground border border-border";
+}
+
+// ─── User Info Panel ───────────────────────────────────────────────────────────
+
+interface UserInfoPanelProps {
+  user: UserDetailResponse;
+  /** avgEntryProximityDistance lives on UserResponse; pass it through if available */
+  avgProximityDistance?: number | null;
+}
+
+function UserInfoPanel({ user, avgProximityDistance }: UserInfoPanelProps) {
+  const fullName =
+    `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.email;
+
+  const joinedOn = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null;
+
+  const fields: { icon: React.ReactNode; label: string; value: React.ReactNode }[] = [
+    {
+      icon: <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />,
+      label: "Email",
+      value: user.email,
+    },
+    {
+      icon: <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />,
+      label: "Role",
+      value: (
+        <span
+          className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${rolePillClass(user.role)}`}
+        >
+          {roleLabel(user.role)}
+        </span>
+      ),
+    },
+    {
+      icon: <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />,
+      label: "Branch",
+      value: user.homeBranchName ?? "—",
+    },
+    ...(avgProximityDistance != null
+      ? [
+          {
+            icon: <Navigation className="h-3.5 w-3.5 text-muted-foreground shrink-0" />,
+            label: "Avg. Clock-in Distance",
+            value: `${Math.round(avgProximityDistance)} m`,
+          },
+        ]
+      : []),
+    ...(joinedOn
+      ? [
+          {
+            icon: <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />,
+            label: "Added On",
+            value: joinedOn,
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="rounded-xl border border-border bg-card p-4 sm:p-5 space-y-4"
+    >
+      {/* Avatar + name row */}
+      <div className="flex items-center gap-3">
+        <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          {user.picture ? (
+            <img
+              src={user.picture}
+              alt={fullName}
+              className="h-11 w-11 rounded-full object-cover"
+            />
+          ) : (
+            <User className="h-5 w-5 text-primary" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate leading-tight">
+            {fullName}
+          </p>
+          <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+            User Profile
+          </p>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="h-px bg-border" />
+
+      {/* Field grid — 1 col on mobile, 2 cols on sm+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {fields.map(({ icon, label, value }) => (
+          <div key={label} className="flex items-start gap-2.5 min-w-0">
+            <div className="mt-0.5">{icon}</div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground leading-none mb-1">
+                {label}
+              </p>
+              <div className="text-sm text-foreground truncate leading-snug">
+                {value}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Inner page content ────────────────────────────────────────────────────────
 
 interface SessionPageContentProps {
   userId: number;
+  user?: UserDetailResponse;
   displayName?: string;
+  avgProximityDistance?: number | null;
   onBack?: () => void;
   headerActions?: React.ReactNode;
-  /** When true, strips the component's own px/py so the parent container controls spacing */
   embedded?: boolean;
 }
 
 function SessionPageContent({
   userId,
+  user,
   displayName,
+  avgProximityDistance,
   onBack,
   headerActions,
   embedded = false,
@@ -112,8 +250,14 @@ function SessionPageContent({
 
   return (
     <div className="min-h-screen bg-background">
-      {/* ── Sticky header — max-w-5xl matches Dashboard ── */}
-      <div className={`${embedded ? '' : 'sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border'}`}>
+      {/* ── Sticky header ── */}
+      <div
+        className={`${
+          embedded
+            ? ""
+            : "sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border"
+        }`}
+      >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2">
           <Button
             variant="ghost"
@@ -161,8 +305,32 @@ function SessionPageContent({
         </div>
       </div>
 
-      {/* ── Content — max-w-5xl, px-4 sm:px-6, py-8 matches Dashboard ── */}
-      <div className={`max-w-5xl mx-auto space-y-8 ${embedded ? 'px-0 py-4' : 'px-4 sm:px-6 py-8'}`}>
+      {/* ── Content ── */}
+      <div
+        className={`max-w-5xl mx-auto space-y-6 ${
+          embedded ? "px-0 py-4" : "px-4 sm:px-6 py-8"
+        }`}
+      >
+        {/* 1. User Info Panel */}
+        {user && (
+          <UserInfoPanel user={user} avgProximityDistance={avgProximityDistance} />
+        )}
+
+        {/* 2. Session History heading */}
+        {user && (
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Session History
+            </p>
+            {sessions.length > 0 && (
+              <span className="text-xs text-muted-foreground sm:hidden">
+                · {sessions.length}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* 3. Sessions */}
         {initialLoad ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -173,7 +341,6 @@ function SessionPageContent({
           </div>
         ) : (
           <>
-            {/* SessionHistory renders identical cards to the Dashboard */}
             <SessionHistory sessions={sessions} />
 
             {/* Infinite scroll sentinel */}
@@ -199,17 +366,19 @@ function SessionPageContent({
 interface UserSessionsPageProps {
   userId?: number;
   user?: UserDetailResponse;
+  /** Pass avgEntryProximityDistance from UserResponse if available at the call site */
+  avgProximityDistance?: number | null;
   onBack?: () => void;
   /** @deprecated Undo endpoints are disabled — prop kept for API compatibility */
   canUndo?: boolean;
   headerActions?: React.ReactNode;
-  /** When rendered inside AdminDashboard, pass true to avoid double padding */
   embedded?: boolean;
 }
 
 export default function UserSessionsPage({
   userId: propUserId,
   user,
+  avgProximityDistance,
   onBack,
   headerActions,
   embedded = false,
@@ -232,7 +401,9 @@ export default function UserSessionsPage({
   return (
     <SessionPageContent
       userId={resolvedId}
+      user={user}
       displayName={displayName}
+      avgProximityDistance={avgProximityDistance}
       onBack={onBack}
       headerActions={headerActions}
       embedded={embedded}

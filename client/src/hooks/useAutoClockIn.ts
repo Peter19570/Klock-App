@@ -178,6 +178,7 @@ export function useAutoClockIn({
       }
 
       // ── Online: submit with retries ───────────────────────────────────────
+      let lastError: unknown;
       while (retriesRef.current < MAX_RETRIES) {
         if (isClockedInRef.current) {
           attemptingRef.current = false;
@@ -189,7 +190,8 @@ export function useAutoClockIn({
           onNotify('success', 'Clocked in automatically! 👍');
           attemptingRef.current = false;
           return;
-        } catch {
+        } catch (err) {
+          lastError = err;
           retriesRef.current++;
         }
       }
@@ -197,7 +199,21 @@ export function useAutoClockIn({
       attemptingRef.current = false;
       if (!isClockedInRef.current) {
         onFallbackManual();
-        onNotify('error', 'Auto clock-in failed. Please clock in manually.');
+        // Surface backend message if available — api.ts sanitizer already
+        // stripped stack traces so it's safe to show directly.
+        const raw = (lastError as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        const REMAP: Record<string, string> = {
+          'You are not within the perimeter of any registered branch.':
+            "You're not within any registered branch location.",
+          'Cannot clock-in at a branch past its end-shift.':
+            "This branch's shift has already ended.",
+          'User has no saved device ID.':
+            'No device is registered for your account. Please log in again.',
+          'Saved device ID does not match current device ID.':
+            "This device doesn't match your registered device. Please use your original device or contact support.",
+        };
+        onNotify('error', (raw && (REMAP[raw] ?? raw)) ?? 'Auto clock-in failed. Please clock in manually.');
       }
     },
     [onSuccess, onFallbackManual, onNotify],

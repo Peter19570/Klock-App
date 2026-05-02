@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   LogIn, LogOut, MapPin, AlertCircle, ChevronRight,
-  Radio, Building2, WifiOff, RefreshCw,
+  Radio, Building2, WifiOff, RefreshCw, Home,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -65,6 +65,27 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 
 const BRANCH_POLL_MS             = 30_000;
 const MANUAL_RECLOCKING_DELAY_MS = 1 * 60 * 1000;
+
+// ─── Backend message remap ─────────────────────────────────────────────────────
+// Slightly friendlier rewrites of known backend messages.
+// api.ts sanitizer already strips stack traces — these are safe to show as-is,
+// but the remaps below read more naturally in a toast notification.
+
+const CLOCK_IN_MESSAGE_MAP: Record<string, string> = {
+  'You are not within the perimeter of any registered branch.':
+    "You're not within any registered branch location.",
+  'Cannot clock-in at a branch past its end-shift.':
+    "This branch's shift has already ended.",
+  'User has no saved device ID.':
+    'No device is registered for your account. Please log in again.',
+  'Saved device ID does not match current device ID.':
+    'This device doesn\'t match your registered device. Please use your original device or contact support.',
+};
+
+function remapClockInMessage(raw: string | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  return CLOCK_IN_MESSAGE_MAP[raw] ?? raw;
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -425,12 +446,8 @@ export function UserDashboard() {
       await handleClockInSuccess(res.data.data.id);
       notify('success', 'Clocked in successfully.');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        ?? 'Clock-in failed. Please try again.';
-      // api.ts sanitizer already stripped stack traces — safe to show directly
-      notify('error', msg);
-      // Surface fallback manual button if backend flagged a location issue
+      const raw = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      notify('error', remapClockInMessage(raw, 'Clock-in failed. Please try again.'));
       setManualClockInEnabled(true);
     } finally {
       setActionLoading(false);
@@ -539,10 +556,8 @@ export function UserDashboard() {
               await handleClockInSuccess(res.data.data.id);
             } catch (err: unknown) {
               setCooldownActive(false);
-              const msg =
-                (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-                ?? 'Auto re-clock-in failed. Please clock in manually.';
-              notify('error', msg);
+              const raw = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+              notify('error', remapClockInMessage(raw, 'Auto re-clock-in failed. Please clock in manually.'));
               setManualClockInEnabled(true);
             }
           } else {
@@ -581,10 +596,8 @@ export function UserDashboard() {
       notify('success', 'Offline clock-in synced successfully.');
       await handleClockInSuccessRef.current(res.data.data.id);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        ?? 'Sync failed. Will retry automatically.';
-      notify('error', msg);
+      const raw = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      notify('error', remapClockInMessage(raw, 'Sync failed. Will retry automatically.'));
     }
   }, [notify]);
 
@@ -644,6 +657,22 @@ export function UserDashboard() {
           Welcome, {user?.firstName} {user?.lastName} 👋
         </h1>
         <p className="text-muted-foreground mt-1">{statusLabel}</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+          {user?.homeBranchName && (
+            <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
+              <Home className="w-3 h-3 shrink-0" />
+              {user.homeBranchName}
+            </p>
+          )}
+          {user?.homeBranchName && user?.createdAt && (
+            <span className="text-xs text-muted-foreground/30">·</span>
+          )}
+          {user?.createdAt && (
+            <p className="text-xs text-muted-foreground/60">
+              Member since {new Date(user.createdAt).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Offline banner (no connection) ────────────────────────────────── */}
@@ -709,7 +738,13 @@ export function UserDashboard() {
               </p>
             </div>
             {!isOffline && (
-              <RefreshCw className="w-4 h-4 shrink-0 text-amber-500 animate-spin" />
+              <button
+                onClick={handleManualFlush}
+                className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Sync Now
+              </button>
             )}
           </motion.div>
         )}

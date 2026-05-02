@@ -69,7 +69,7 @@ public class AttendanceService {
         if (true == request.isDelaySync()){
             // Ensures that the offline clock-in request is actually valid 🙂
             if (delayedDiff > 86400){
-                throw new ExpiredClockInRequestException("Clock in request is expired");
+                throw new BadRequestException("Clock in request is expired");
             }
         } else {
             // Validates request timestamps and rejects those outside the acceptable server time window.
