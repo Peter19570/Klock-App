@@ -30,6 +30,11 @@ const BUILDINGS = [
   { x: '75%', y: '74%', w: 38, h: 20, opacity: 0.08, delay: 0.35 },
 ];
 
+// 3 horizontal lines at 25%, 50%, 75% — animate left → right
+const H_LINES = ['25%', '50%', '75%'];
+// 3 vertical lines at 25%, 50%, 75% — animate top → bottom
+const V_LINES = ['25%', '50%', '75%'];
+
 export function LocationMap({
   location = 'Current Location',
   coordinates = '',
@@ -68,13 +73,18 @@ export function LocationMap({
       onClick={() => setIsExpanded(!isExpanded)}
     >
       <motion.div
-        className="relative overflow-hidden rounded-2xl bg-background border border-border"
+        className="relative overflow-hidden rounded-2xl bg-background border border-border w-full"
         style={{
           rotateX: springRotateX,
           rotateY: springRotateY,
           transformStyle: 'preserve-3d',
         }}
-        animate={{ width: isExpanded ? 360 : 240, height: isExpanded ? 280 : 140 }}
+        animate={{
+          // Responsive: clamp between min and a percentage of viewport, but keep
+          // explicit px values so the spring has concrete targets.
+          width: isExpanded ? 'min(360px, 92vw)' : 'min(240px, 92vw)',
+          height: isExpanded ? 280 : 140,
+        }}
         transition={{ type: 'spring', stiffness: 400, damping: 35 }}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-muted/20 via-transparent to-muted/40" />
@@ -91,46 +101,56 @@ export function LocationMap({
               {/* Base map background */}
               <div className="absolute inset-0 bg-muted" />
 
-              {/* Grid lines */}
-              <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
-                {[[0, '35%', '100%', '35%'], [0, '65%', '100%', '65%']].map(
-                  ([x1, y1, x2, y2], i) => (
-                    <motion.line
-                      key={i}
-                      x1={x1} y1={y1} x2={x2} y2={y2}
-                      className="stroke-foreground/25"
-                      strokeWidth="4"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 0.8, delay: 0.2 + i * 0.1 }}
-                    />
-                  ),
-                )}
-                {['30%', '70%'].map((x, i) => (
+              {/* ── Grid lines ── */}
+              <svg
+                className="absolute inset-0 w-full h-full"
+                preserveAspectRatio="none"
+                overflow="visible"
+              >
+                {/* 3 horizontal lines — draw left → right */}
+                {H_LINES.map((y, i) => (
                   <motion.line
-                    key={i}
-                    x1={x} y1="0%" x2={x} y2="100%"
-                    className="stroke-foreground/20"
+                    key={`h-${i}`}
+                    x1="0%"
+                    y1={y}
+                    x2="100%"
+                    y2={y}
+                    stroke="rgba(120,120,140,0.18)"
                     strokeWidth="3"
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ duration: 0.6, delay: 0.4 + i * 0.1 }}
+                    strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: 1 }}
+                    exit={{ pathLength: 0, opacity: 0 }}
+                    transition={{
+                      pathLength: { duration: 0.7, delay: 0.15 + i * 0.12, ease: 'easeOut' },
+                      opacity: { duration: 0.2, delay: 0.15 + i * 0.12 },
+                    }}
                   />
                 ))}
-                {[20, 50, 80].map((y, i) => (
+
+                {/* 3 vertical lines — draw top → bottom */}
+                {V_LINES.map((x, i) => (
                   <motion.line
-                    key={i}
-                    x1="0%" y1={`${y}%`} x2="100%" y2={`${y}%`}
-                    className="stroke-foreground/10"
-                    strokeWidth="1.5"
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ duration: 0.5, delay: 0.6 + i * 0.1 }}
+                    key={`v-${i}`}
+                    x1={x}
+                    y1="0%"
+                    x2={x}
+                    y2="100%"
+                    stroke="rgba(120,120,140,0.14)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: 1 }}
+                    exit={{ pathLength: 0, opacity: 0 }}
+                    transition={{
+                      pathLength: { duration: 0.7, delay: 0.3 + i * 0.12, ease: 'easeOut' },
+                      opacity: { duration: 0.2, delay: 0.3 + i * 0.12 },
+                    }}
                   />
                 ))}
               </svg>
 
-              {/* ── Building block decorations ───────────────────────────── */}
+              {/* ── Building block decorations ── */}
               {BUILDINGS.map((b, i) => (
                 <motion.div
                   key={i}
