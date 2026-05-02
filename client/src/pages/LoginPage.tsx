@@ -36,7 +36,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="light min-h-screen flex items-center justify-center px-4"
+      className="light min-h-screen flex items-center justify-center px-4 py-8"
       style={{
         background: "linear-gradient(to top, #fffbeb, #ffffff)",
         colorScheme: "light",
@@ -44,25 +44,19 @@ export default function LoginPage() {
     >
       <div className="w-full max-w-sm">
         {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-            <svg className="h-7 w-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="mx-auto mb-3 sm:mb-4 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
+            <svg className="h-6 w-6 sm:h-7 sm:w-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome to Klock</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Welcome to Klock</h1>
           <p className="mt-1 text-sm text-gray-500">Sign in to your account</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          {error && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
               <Label htmlFor="email" className="text-gray-700">Email</Label>
@@ -71,7 +65,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 autoComplete="email"
                 autoFocus
                 className="mt-1"
@@ -87,9 +81,9 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   placeholder="Your password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
                   autoComplete="current-password"
-                  className="pr-10"
+                  className={`pr-10 ${error ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                   disabled={isLoading}
                 />
                 <button
@@ -101,6 +95,9 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {error && (
+                <p className="mt-1.5 text-xs text-red-500">{error}</p>
+              )}
             </div>
 
             <Button

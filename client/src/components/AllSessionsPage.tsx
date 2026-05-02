@@ -111,7 +111,7 @@ export default function AllSessionsPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Sticky header — matches Dashboard max-w-5xl ── */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border">
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button
             variant="ghost"
