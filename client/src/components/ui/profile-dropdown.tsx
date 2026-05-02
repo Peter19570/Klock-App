@@ -1,6 +1,7 @@
 import * as React from "react";
 import { LogOut, User, ChevronDown, Sun, Moon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -52,6 +53,7 @@ export function ProfileDropdown({
 }: ProfileDropdownProps) {
   const { logout } = useAuth();
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const isDark = theme === "dark";
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -281,7 +283,9 @@ export function ProfileDropdown({
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  logout();
+                  // FIX: pass navigate so logout uses React Router history
+                  // instead of window.location.href, keeping the SPA stack intact.
+                  logout((path) => navigate(path, { replace: true }));
                 }}
                 className={cn(
                   "w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl",

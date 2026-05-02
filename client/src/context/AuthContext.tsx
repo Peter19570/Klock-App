@@ -4,10 +4,6 @@ import type { UserDetailResponse, AuthRequest } from "@/types";
 
 // ── Device registration helpers ───────────────────────────────────────────────
 
-/**
- * Returns the same stable device ID used by useAutoClockIn (klock_device_id).
- * Generates a SHA-256 fingerprint from browser info on first call.
- */
 async function getDeviceId(): Promise<string> {
   const stored = localStorage.getItem("klock_device_id");
   if (stored) return stored;
@@ -21,26 +17,15 @@ async function getDeviceId(): Promise<string> {
   return id;
 }
 
-/**
- * Returns true if the user has no device registered yet.
- * The backend sets deviceId to the string "not set" when unregistered,
- * but we also guard against null/undefined for safety.
- */
 function deviceIsUnset(deviceId: UserDetailResponse["deviceId"]): boolean {
   return deviceId == null || deviceId === "NOT SET";
 }
 
-/**
- * Only registers the device if the user's deviceId is unset.
- * Fires silently in the background — non-fatal if it fails.
- * Shows a brief browser notification on success if permission is granted.
- */
 async function registerDeviceIfNeeded(userData: UserDetailResponse): Promise<void> {
   if (!deviceIsUnset(userData.deviceId)) return;
   try {
     const deviceId = await getDeviceId();
     await api.post("/api/v1/auth/device", { deviceId });
-    // Optional: non-disruptive success notification via the Notifications API
     if ("Notification" in window && Notification.permission === "granted") {
       new Notification("Klock", { body: "Device registered successfully.", silent: true });
     }
@@ -49,11 +34,19 @@ async function registerDeviceIfNeeded(userData: UserDetailResponse): Promise<voi
   }
 }
 
+// ── Resolve where a user should land after login ──────────────────────────────
+
+export function resolveHomeRoute(userData: UserDetailResponse): string {
+  if (userData.mustChangePassword) return "/onboarding";
+  if (userData.role === "SUPER_ADMIN" || userData.role === "ADMIN") return "/admin";
+  return "/dashboard";
+}
+
 interface AuthContextValue {
   user: UserDetailResponse | null;
   loading: boolean;
-  login: (data: AuthRequest) => Promise<void>;
-  logout: () => Promise<void>;
+  login: (data: AuthRequest, navigate: (path: string) => void) => Promise<void>;
+  logout: (navigate: (path: string) => void) => Promise<void>;
   refetchUser: () => Promise<void>;
 }
 
@@ -79,10 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     clearLoggingOutFlag();
-
     const hasAccess  = Boolean(tokenStore.getAccess());
     const hasRefresh = Boolean(tokenStore.getRefresh());
-
     if (hasAccess && hasRefresh) {
       fetchUser();
     } else {
@@ -92,19 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleHardRedirect = (userData: UserDetailResponse) => {
-    if (userData.mustChangePassword) {
-      window.location.href = "/onboarding";
-      return;
-    }
-    if (userData.role === "SUPER_ADMIN" || userData.role === "ADMIN") {
-      window.location.href = "/admin";
-      return;
-    }
-    window.location.href = "/dashboard";
-  };
-
-  const login = async (data: AuthRequest) => {
+  // FIX: accept navigate from the caller so we use React Router's history stack
+  // instead of window.location.href, which nukes the SPA history on every call.
+  const login = async (data: AuthRequest, navigate: (path: string) => void) => {
     const res = await api.post<{ data: { accessToken: string; refreshToken: string } }>(
       "/api/v1/auth/login",
       data
@@ -114,11 +95,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = await fetchUser();
     if (userData) {
       await registerDeviceIfNeeded(userData);
-      handleHardRedirect(userData);
+      // replace: true so the login page is NOT pushed onto the history stack —
+      // pressing back from /dashboard won't return to /login.
+      navigate(resolveHomeRoute(userData));
     }
   };
 
-  const logout = async () => {
+  const logout = async (navigate: (path: string) => void) => {
     const refreshToken = tokenStore.getRefresh();
     setUser(null);
     try {
@@ -130,7 +113,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       tokenStore.clear();
       localStorage.removeItem("klock-theme");
-      window.location.href = "/";
+      // replace: true so users can't press forward to get back into the app
+      // after logging out.
+      navigate("/");
     }
   };
 
