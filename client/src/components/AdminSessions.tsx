@@ -1,8 +1,8 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Clock, CalendarDays,
-  Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw, Download,
+  ChevronDown, Clock, CalendarDays,
+  Hand, Zap, SlidersHorizontal, X, Loader2, RefreshCw, Download, ArrowUp,
   Timer, AlarmClock, MapPin, Ruler, BarChart2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -688,42 +688,82 @@ interface AdminSessionsProps {
 
 export default function AdminSessions({ branches = [] }: AdminSessionsProps) {
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
-  const [totalPages, setTotalPages]   = React.useState(0);
-  const [currentPage, setCurrentPage] = React.useState(0);
+  const [page, setPage]               = React.useState(0);
+  const [hasMore, setHasMore]         = React.useState(true);
   const [loading, setLoading]         = React.useState(false);
+  const [initialLoad, setInitialLoad] = React.useState(true);
   const [refreshing, setRefreshing]   = React.useState(false);
+  const [showBackToTop, setShowBackToTop] = React.useState(false);
+  const loaderRef = React.useRef<HTMLDivElement>(null);
 
   const [filters, setFilters] = React.useState<SessionFilterState>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
 
-  const fetchSessions = React.useCallback(async (page: number) => {
+  const fetchSessions = React.useCallback(async (pageNum: number) => {
+    if (loading) return;
     setLoading(true);
     try {
       const res = await getAdminSessions({
-        page,
+        page: pageNum,
         size: 20,
-        ...(filters.minDate      && { minWorkDate:     filters.minDate }),
-        ...(filters.maxDate      && { maxWorkDate:     filters.maxDate }),
+        ...(filters.minDate       && { minWorkDate:    filters.minDate }),
+        ...(filters.maxDate       && { maxWorkDate:    filters.maxDate }),
         ...(filters.arrivalStatus && { arrivalStatus:  filters.arrivalStatus }),
         ...(filters.sessionStatus && { sessionStatus:  filters.sessionStatus }),
       });
       const data = res.data.data;
-      setSessions(data.content);
-      setTotalPages(data.totalPages);
-      setCurrentPage(data.number);
+      setSessions((prev) => pageNum === 0 ? data.content : [...prev, ...data.content]);
+      setHasMore(!data.last);
+      setPage(pageNum + 1);
     } catch (err) {
       console.error("Failed to fetch sessions", err);
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   }, [filters]);
 
-  React.useEffect(() => { fetchSessions(0); }, [fetchSessions]);
+  // Reset on filter change
+  React.useEffect(() => {
+    setSessions([]);
+    setPage(0);
+    setHasMore(true);
+    setInitialLoad(true);
+  }, [filters]);
 
-  const handleRefresh = async () => {
+  React.useEffect(() => {
+    if (initialLoad) fetchSessions(0);
+  }, [initialLoad, fetchSessions]);
+
+  // Infinite scroll sentinel
+  React.useEffect(() => {
+    const el = loaderRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !initialLoad)
+          fetchSessions(page);
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fetchSessions, hasMore, loading, page, initialLoad]);
+
+  // Back to top
+  React.useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 400);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const handleRefresh = () => {
     setRefreshing(true);
-    await fetchSessions(currentPage);
+    setSessions([]);
+    setPage(0);
+    setHasMore(true);
+    setInitialLoad(true);
     setRefreshing(false);
   };
 
@@ -863,7 +903,7 @@ export default function AdminSessions({ branches = [] }: AdminSessionsProps) {
         )}
       </div>
 
-      {loading ? (
+      {initialLoad ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -899,19 +939,32 @@ export default function AdminSessions({ branches = [] }: AdminSessionsProps) {
         );
       })()}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground">Page {currentPage + 1} of {totalPages}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" disabled={currentPage === 0} onClick={() => fetchSessions(currentPage - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" disabled={currentPage >= totalPages - 1} onClick={() => fetchSessions(currentPage + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* Infinite scroll sentinel */}
+      {!initialLoad && (
+        <div ref={loaderRef} className="flex justify-center py-5">
+          {loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+          {!hasMore && sessions.length > 0 && (
+            <p className="text-xs text-muted-foreground">You've reached the end</p>
+          )}
         </div>
       )}
+
+      {/* Back to top */}
+      <AnimatePresence>
+        {showBackToTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-6 z-50 flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            aria-label="Back to top"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <SessionFilterModal
         open={filterOpen}

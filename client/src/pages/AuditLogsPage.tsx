@@ -15,6 +15,12 @@ import {
   X,
   Search,
   CalendarDays,
+  UserCheck,
+  UserPlus,
+  UserCog,
+  KeyRound,
+  RotateCcw,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +81,42 @@ const TYPE_CONFIG: Record<
     icon: <HelpCircle className="h-4 w-4" />,
     iconBg: "bg-purple-500/15 text-purple-500",
     badge: "bg-purple-500/15 border-purple-400/30 text-purple-500",
+  },
+  LOGIN_SUCCESS: {
+    label: "Login",
+    icon: <UserCheck className="h-4 w-4" />,
+    iconBg: "bg-emerald-500/15 text-emerald-500",
+    badge: "bg-emerald-500/15 border-emerald-400/30 text-emerald-500",
+  },
+  USER_CREATED: {
+    label: "User Created",
+    icon: <UserPlus className="h-4 w-4" />,
+    iconBg: "bg-sky-500/15 text-sky-500",
+    badge: "bg-sky-500/15 border-sky-400/30 text-sky-500",
+  },
+  USER_UPDATED: {
+    label: "User Updated",
+    icon: <UserCog className="h-4 w-4" />,
+    iconBg: "bg-blue-500/15 text-blue-500",
+    badge: "bg-blue-500/15 border-blue-400/30 text-blue-500",
+  },
+  DEVICE_ID_RESET: {
+    label: "Device Reset",
+    icon: <RotateCcw className="h-4 w-4" />,
+    iconBg: "bg-amber-500/15 text-amber-500",
+    badge: "bg-amber-500/15 border-amber-400/30 text-amber-500",
+  },
+  PASSWORD_RESET: {
+    label: "Password Reset",
+    icon: <KeyRound className="h-4 w-4" />,
+    iconBg: "bg-orange-500/15 text-orange-500",
+    badge: "bg-orange-500/15 border-orange-400/30 text-orange-500",
+  },
+  BRANCH_INFO_UPDATED: {
+    label: "Branch Updated",
+    icon: <Building2 className="h-4 w-4" />,
+    iconBg: "bg-slate-500/15 text-slate-500",
+    badge: "bg-slate-500/15 border-slate-400/30 text-slate-500",
   },
 };
 
@@ -224,6 +266,12 @@ const ALL_TYPES: AuditLogType[] = [
   "SUSPICIOUS_CLOCK_OUT",
   "DIFFERENT_DEVICE_DETECT",
   "AMBIGUOUS_CLOCK_EVENT",
+  "LOGIN_SUCCESS",
+  "USER_CREATED",
+  "USER_UPDATED",
+  "DEVICE_ID_RESET",
+  "PASSWORD_RESET",
+  "BRANCH_INFO_UPDATED",
 ];
 
 interface AuditFilters {

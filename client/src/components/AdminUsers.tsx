@@ -1,8 +1,8 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import {
-  Search, Trash2, ChevronLeft, ChevronRight, User, Plus,
-  ArrowRightLeft, Check, SlidersHorizontal, X, Loader2, RefreshCw,
+  Search, Trash2, User, Plus,
+  ArrowRightLeft, ArrowUp, Check, SlidersHorizontal, X, Loader2, RefreshCw,
   FileText, MapPin, Navigation, MoreVertical, Pencil, KeyRound, Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -811,10 +811,13 @@ export default function AdminUsers({
   onCreateUser,
 }: AdminUsersProps) {
   const [users, setUsers]             = React.useState<UserResponse[]>([]);
-  const [totalPages, setTotalPages]   = React.useState(0);
-  const [currentPage, setCurrentPage] = React.useState(0);
+  const [page, setPage]               = React.useState(0);
+  const [hasMore, setHasMore]         = React.useState(true);
   const [loading, setLoading]         = React.useState(false);
+  const [initialLoad, setInitialLoad] = React.useState(true);
   const [refreshing, setRefreshing]   = React.useState(false);
+  const [showBackToTop, setShowBackToTop] = React.useState(false);
+  const loaderRef = React.useRef<HTMLDivElement>(null);
 
   const [nameFilter, setNameFilter]     = React.useState('');
   const [emailFilter, setEmailFilter]   = React.useState('');
@@ -843,12 +846,13 @@ export default function AdminUsers({
   const [resetDeviceName, setResetDeviceName]         = React.useState('');
   const [resettingDevice, setResettingDevice]         = React.useState(false);
 
-  const fetchUsers = React.useCallback(async (page: number) => {
+  const fetchUsers = React.useCallback(async (pageNum: number) => {
+    if (loading) return;
     setLoading(true);
     try {
       const res = await api.get<ApiResponse<PageResponse<UserResponse>>>('/api/v1/users', {
         params: {
-          page,
+          page: pageNum,
           size: 20,
           ...(debouncedName  && { fullName: debouncedName }),
           ...(debouncedEmail && { email: debouncedEmail }),
@@ -856,17 +860,50 @@ export default function AdminUsers({
         },
       });
       const data = res.data.data;
-      setUsers(data.content);
-      setTotalPages(data.totalPages);
-      setCurrentPage(data.number);
+      setUsers((prev) => pageNum === 0 ? data.content : [...prev, ...data.content]);
+      setHasMore(!data.last);
+      setPage(pageNum + 1);
     } catch (err) {
       console.error('Failed to fetch users', err);
     } finally {
       setLoading(false);
+      setInitialLoad(false);
     }
   }, [debouncedName, debouncedEmail, branchFilter]);
 
-  React.useEffect(() => { fetchUsers(0); }, [fetchUsers]);
+  // Reset on filter change
+  React.useEffect(() => {
+    setUsers([]);
+    setPage(0);
+    setHasMore(true);
+    setInitialLoad(true);
+  }, [debouncedName, debouncedEmail, branchFilter]);
+
+  React.useEffect(() => {
+    if (initialLoad) fetchUsers(0);
+  }, [initialLoad, fetchUsers]);
+
+  // Infinite scroll sentinel
+  React.useEffect(() => {
+    const el = loaderRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !initialLoad)
+          fetchUsers(page);
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [fetchUsers, hasMore, loading, page, initialLoad]);
+
+  // Back to top
+  React.useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 400);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleCardClick = async (id: number) => {
     if (loadingUser !== null) return;
@@ -888,7 +925,10 @@ export default function AdminUsers({
     try {
       await api.delete(`/api/v1/users/${id}`);
       setDeleteConfirm(null);
-      fetchUsers(currentPage);
+      setUsers([]);
+      setPage(0);
+      setHasMore(true);
+      setInitialLoad(true);
     } catch (err) {
       console.error('Failed to delete user', err);
     }
@@ -899,7 +939,10 @@ export default function AdminUsers({
     setTransferring(true);
     try {
       await transferUser(transferUserId, transferBranchId);
-      fetchUsers(currentPage);
+      setUsers([]);
+      setPage(0);
+      setHasMore(true);
+      setInitialLoad(true);
       setTransferUserId(null);
       setTransferBranchId(null);
     } catch (err) {
@@ -909,9 +952,12 @@ export default function AdminUsers({
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     setRefreshing(true);
-    await fetchUsers(currentPage);
+    setUsers([]);
+    setPage(0);
+    setHasMore(true);
+    setInitialLoad(true);
     setRefreshing(false);
   };
 
@@ -1066,7 +1112,7 @@ export default function AdminUsers({
       </div>
 
       {/* User list */}
-      {loading ? (
+      {initialLoad ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -1233,19 +1279,32 @@ export default function AdminUsers({
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground">Page {currentPage + 1} of {totalPages}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="icon" disabled={currentPage === 0} onClick={() => fetchUsers(currentPage - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" disabled={currentPage >= totalPages - 1} onClick={() => fetchUsers(currentPage + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* Infinite scroll sentinel */}
+      {!initialLoad && (
+        <div ref={loaderRef} className="flex justify-center py-5">
+          {loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+          {!hasMore && users.length > 0 && (
+            <p className="text-xs text-muted-foreground">You've reached the end</p>
+          )}
         </div>
       )}
+
+      {/* Back to top */}
+      <AnimatePresence>
+        {showBackToTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="fixed bottom-6 right-6 z-50 flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            aria-label="Back to top"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <FilterModal
         open={filterOpen}
@@ -1295,7 +1354,7 @@ export default function AdminUsers({
         open={editUser !== null}
         user={editUser}
         onClose={() => setEditUser(null)}
-        onSaved={() => fetchUsers(currentPage)}
+        onSaved={() => { setUsers([]); setPage(0); setHasMore(true); setInitialLoad(true); }}
       />
 
       {/* Password Reset Confirm Modal */}

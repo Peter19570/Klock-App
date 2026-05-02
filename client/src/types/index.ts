@@ -220,7 +220,13 @@ export type AuditLogType =
   | 'CLOCK_OUT_SUCCESS'
   | 'SUSPICIOUS_CLOCK_OUT'
   | 'DIFFERENT_DEVICE_DETECT'
-  | 'AMBIGUOUS_CLOCK_EVENT';
+  | 'AMBIGUOUS_CLOCK_EVENT'
+  | 'LOGIN_SUCCESS'
+  | 'USER_CREATED'
+  | 'USER_UPDATED'
+  | 'DEVICE_ID_RESET'
+  | 'PASSWORD_RESET'
+  | 'BRANCH_INFO_UPDATED';
 
 export interface AuditLogResponse {
   id: number;
