@@ -53,6 +53,8 @@ export interface AdminUpdateUserRequest {
   firstName: string;
   lastName: string;
   role: UserRole;
+  /** Required when role is ADMIN or SUPER_ADMIN */
+  phone?: string;
 }
 
 // ─── User creation (Super Admin only) ────────────────────────────────────────

@@ -484,8 +484,11 @@ function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
   const [lastName, setLastName]   = React.useState('');
   const [email, setEmail]         = React.useState('');
   const [role, setRole]           = React.useState<UserRole>('USER');
+  const [phone, setPhone]         = React.useState('');
   const [saving, setSaving]       = React.useState(false);
   const [error, setError]         = React.useState<string | null>(null);
+
+  const requiresPhone = role === 'ADMIN' || role === 'SUPER_ADMIN';
 
   React.useEffect(() => {
     if (open && user) {
@@ -500,16 +503,27 @@ function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
       }
       setEmail(user.email);
       setRole(user.role ?? 'USER');
+      setPhone(('phone' in user ? user.phone : null) ?? '');
       setError(null);
     }
   }, [open, user]);
 
   const handleSave = async () => {
     if (!user) return;
+    if (requiresPhone && !phone.trim()) {
+      setError('A contact number is required for Admin and Super Admin roles.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const payload: AdminUpdateUserRequest = { firstName, lastName, email, role };
+      const payload: AdminUpdateUserRequest = {
+        firstName,
+        lastName,
+        email,
+        role,
+        ...(requiresPhone ? { phone: phone.trim() } : {}),
+      };
       await updateUserProfile(user.id, payload);
       onSaved();
       onClose();
@@ -597,6 +611,26 @@ function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
                 </select>
               </div>
 
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Contact Number
+                  {requiresPhone && <span className="ml-1 text-destructive">*</span>}
+                </Label>
+                <Input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={requiresPhone ? 'Required for Admin roles' : 'Optional'}
+                  className="h-9"
+                  disabled={saving}
+                />
+                {requiresPhone && (
+                  <p className="text-[11px] text-muted-foreground leading-tight">
+                    A contact number is required for Admin and Super Admin accounts.
+                  </p>
+                )}
+              </div>
+
               {error && (
                 <p className="text-xs text-destructive">{error}</p>
               )}
@@ -609,7 +643,7 @@ function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
               <Button
                 className="flex-1 h-9 text-sm"
                 onClick={handleSave}
-                disabled={saving || !firstName.trim() || !lastName.trim() || !email.trim()}
+                disabled={saving || !firstName.trim() || !lastName.trim() || !email.trim() || (requiresPhone && !phone.trim())}
               >
                 {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Save Changes'}
               </Button>
