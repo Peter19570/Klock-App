@@ -4,6 +4,7 @@ import {
   Search, Trash2, User, Plus,
   ArrowRightLeft, ArrowUp, Check, SlidersHorizontal, X, Loader2, RefreshCw,
   FileText, MapPin, Navigation, MoreVertical, Pencil, KeyRound, Smartphone,
+  Mail, Phone, Building2, CalendarDays,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -656,6 +657,162 @@ function EditUserModal({ open, user, onClose, onSaved }: EditUserModalProps) {
   );
 }
 
+// ─── Profile Card Modal ────────────────────────────────────────────────────────
+
+function roleLabel(role: UserRole) {
+  if (role === 'SUPER_ADMIN') return 'Super Admin';
+  if (role === 'ADMIN') return 'Admin';
+  return 'Employee';
+}
+
+function rolePillClass(role: UserRole) {
+  if (role === 'SUPER_ADMIN')
+    return 'bg-amber-400/15 text-amber-500 border border-amber-400/30';
+  if (role === 'ADMIN') return 'bg-primary/15 text-primary border border-primary/20';
+  return 'bg-muted text-muted-foreground border border-border';
+}
+
+interface ProfileCardModalProps {
+  open: boolean;
+  user: UserDetailResponse | null;
+  loading: boolean;
+  onClose: () => void;
+}
+
+function ProfileCardModal({ open, user, loading, onClose }: ProfileCardModalProps) {
+  const fullName = user
+    ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email
+    : '';
+
+  const joinedOn = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : null;
+
+  return ReactDOM.createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4 z-[80]"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="relative w-full max-w-sm bg-card border border-border rounded-3xl shadow-2xl overflow-hidden"
+          >
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              className="absolute top-3 right-3 z-10 flex items-center justify-center h-7 w-7 rounded-full bg-muted/80 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Gradient glow behind avatar */}
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent pointer-events-none" />
+
+            {loading || !user ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center px-6 pt-8 pb-6 gap-0">
+                {/* Avatar */}
+                <div className="relative h-20 w-20 rounded-full ring-2 ring-border bg-muted flex items-center justify-center overflow-hidden shrink-0 mb-4">
+                  {user.picture ? (
+                    <img
+                      src={user.picture}
+                      alt={fullName}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <User className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+
+                {/* Name + role pill */}
+                <h2 className="text-lg font-bold text-foreground text-center leading-tight truncate max-w-full">
+                  {fullName}
+                </h2>
+                <span
+                  className={`mt-1.5 inline-flex items-center text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full ${rolePillClass(user.role)}`}
+                >
+                  {roleLabel(user.role)}
+                </span>
+
+                {/* Divider */}
+                <div className="w-2/3 h-px bg-border my-5" />
+
+                {/* Fields */}
+                <div className="w-full flex flex-col gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted shrink-0">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground leading-none mb-0.5">Email</p>
+                      <p className="text-sm text-foreground truncate">{user.email}</p>
+                    </div>
+                  </div>
+
+                  {user.homeBranchName && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted shrink-0">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground leading-none mb-0.5">Branch</p>
+                        <p className="text-sm text-foreground truncate">{user.homeBranchName}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {user.phone && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted shrink-0">
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground leading-none mb-0.5">Phone</p>
+                        <p className="text-sm text-foreground truncate">{user.phone}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {joinedOn && (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-muted shrink-0">
+                        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground leading-none mb-0.5">Joined</p>
+                        <p className="text-sm text-foreground">{joinedOn}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 // ─── User Action Sheet (mobile) ────────────────────────────────────────────────
@@ -871,6 +1028,11 @@ export default function AdminUsers({
   const [userView, setUserView]         = React.useState<UserView>('list');
   const [actionSheetUser, setActionSheetUser] = React.useState<UserResponse | null>(null);
 
+  // Profile card modal (avatar click)
+  const [profileCardUser, setProfileCardUser]       = React.useState<UserDetailResponse | null>(null);
+  const [profileCardOpen, setProfileCardOpen]       = React.useState(false);
+  const [loadingProfileCard, setLoadingProfileCard] = React.useState(false);
+
   // ── New admin action state ─────────────────────────────────────────────────
   const [editUser, setEditUser]                       = React.useState<UserResponse | null>(null);
   const [resetPasswordUserId, setResetPasswordUserId] = React.useState<number | null>(null);
@@ -952,6 +1114,24 @@ export default function AdminUsers({
       console.error('Failed to fetch user detail', err);
     } finally {
       setLoadingUser(null);
+    }
+  };
+
+  const handleAvatarClick = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    setProfileCardUser(null);
+    setProfileCardOpen(true);
+    setLoadingProfileCard(true);
+    try {
+      const res = await api.get<ApiResponse<UserDetailResponse>>(`/api/v1/users/${id}`);
+      const userData = res.data.data;
+      if (!userData) throw new Error('No user data returned');
+      setProfileCardUser(userData);
+    } catch (err) {
+      console.error('Failed to fetch user profile', err);
+      setProfileCardOpen(false);
+    } finally {
+      setLoadingProfileCard(false);
     }
   };
 
@@ -1145,6 +1325,19 @@ export default function AdminUsers({
         </Button>
       </div>
 
+      {/* Interaction hint */}
+      <div className="flex items-center gap-2 mb-3 px-1 text-xs text-muted-foreground/70">
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded-sm bg-muted-foreground/20 shrink-0" />
+          Tap a name to view sessions
+        </span>
+        <span className="text-muted-foreground/30">·</span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded-full bg-muted-foreground/20 shrink-0" />
+          Tap an avatar to view profile
+        </span>
+      </div>
+
       {/* User list */}
       {initialLoad ? (
         <div className="flex justify-center py-16">
@@ -1173,14 +1366,19 @@ export default function AdminUsers({
                   }`}
                   role="listitem"
                 >
-                  {/* Avatar */}
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground overflow-hidden">
+                  {/* Avatar — click opens profile card */}
+                  <button
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground overflow-hidden ring-0 hover:ring-2 hover:ring-primary/40 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    onClick={(e) => handleAvatarClick(e, user.id)}
+                    title="View profile"
+                    aria-label={`View ${user.fullName} profile`}
+                  >
                     {user.picture ? (
                       <img src={user.picture} alt={user.fullName} className="h-10 w-10 object-cover" />
                     ) : (
                       <User className="h-4 w-4" />
                     )}
-                  </div>
+                  </button>
 
                   {/* Text — click goes to sessions */}
                   <button
@@ -1339,6 +1537,14 @@ export default function AdminUsers({
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Profile Card Modal */}
+      <ProfileCardModal
+        open={profileCardOpen}
+        user={profileCardUser}
+        loading={loadingProfileCard}
+        onClose={() => { setProfileCardOpen(false); setProfileCardUser(null); }}
+      />
 
       <FilterModal
         open={filterOpen}
