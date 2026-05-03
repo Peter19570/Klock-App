@@ -206,9 +206,9 @@ export default function AllSessionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex flex-col bg-background">
       {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
+      <div className="sticky top-16 z-10 bg-background/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button
             variant="ghost"
@@ -267,7 +267,7 @@ export default function AllSessionsPage() {
       </div>
 
       {/* ── Session list ── */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="flex-1 max-w-5xl mx-auto w-full min-h-[calc(100vh-8rem)] px-4 sm:px-6 py-8 space-y-8">
         {initialLoad ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />

@@ -157,13 +157,13 @@ function SessionPageContent({
       : ownerName ?? "User";
 
   return (
-    <div className={embedded ? "bg-background" : "min-h-screen bg-background"}>
+    <div className={embedded ? "flex flex-col bg-background" : "flex flex-col bg-background"}>
       {/* ── Sticky header ── */}
       <div
         className={`${
           embedded
             ? ""
-            : "sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border"
+            : "sticky top-16 z-10 bg-background/90 backdrop-blur-sm border-b border-border"
         }`}
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-2">
@@ -354,7 +354,7 @@ function SessionPageContent({
 
       {/* ── Sessions (primary content) ── */}
       <div
-        className={`max-w-5xl mx-auto ${
+        className={`flex-1 max-w-5xl mx-auto w-full min-h-[calc(100vh-8rem)] ${
           embedded ? "px-0 py-4" : "px-4 sm:px-6 py-8"
         }`}
       >
