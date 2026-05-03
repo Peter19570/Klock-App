@@ -28,7 +28,7 @@ import {
   isActive,
   getActiveMovement,
 } from '../services/sessionService';
-import { getAllBranches, getBranchDetails }  from '../services/branchService';
+import { getAllBranches }  from '../services/branchService';
 import {
   savePendingClockIn,
   getPendingClockIn,
@@ -233,17 +233,7 @@ export function UserDashboard() {
           isActive(),
         ]);
         const fetched = branchRes.data.data.content ?? [];
-        const enriched = await Promise.all(
-          fetched.map(async (b) => {
-            try {
-              const det = await getBranchDetails(b.id);
-              return { ...b, autoClockOutDuration: det.data.data.autoClockOutDuration };
-            } catch {
-              return b;
-            }
-          }),
-        );
-        setBranches(enriched);
+        setBranches(fetched);
         setIsClockedIn(activeStatus);
         await fetchSessions();
         if (activeStatus) await fetchActiveBranch();
@@ -267,15 +257,7 @@ export function UserDashboard() {
       try {
         const res      = await getAllBranches({ page: 0, size: 100 });
         const fetched  = res.data.data.content ?? [];
-        const enriched = await Promise.all(
-          fetched.map(async (b) => {
-            try {
-              const det = await getBranchDetails(b.id);
-              return { ...b, autoClockOutDuration: det.data.data.autoClockOutDuration };
-            } catch { return b; }
-          }),
-        );
-        setBranches(enriched);
+        setBranches(fetched);
       } catch { /* silent */ }
     }, BRANCH_POLL_MS);
     return () => clearInterval(id);
