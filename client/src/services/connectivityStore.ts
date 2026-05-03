@@ -24,7 +24,7 @@
 // Ping Cloudflare's DNS — tiny, reliable, works from localhost, no auth.
 // Using mode:'no-cors' so CORS never blocks it. We don't read the response,
 // just care whether a response came back at all.
-const HEARTBEAT_URL = 'https://1.1.1.1';
+const HEARTBEAT_URL = 'https://one.one.one.one';
 const HEARTBEAT_INTERVAL = 30_000;           // 30 seconds
 const HEARTBEAT_TIMEOUT  = 5_000;            // 5 seconds before we call it offline
 
@@ -95,6 +95,19 @@ export function startConnectivityMonitor(): () => void {
   window.addEventListener('online',  handleOnline);
   window.addEventListener('offline', handleOffline);
 
+  // Pause heartbeat when tab is hidden, resume when visible
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      if (_heartbeatId) clearInterval(_heartbeatId);
+      _heartbeatId = null;
+    } else {
+      // Tab is visible again — check immediately then resume interval
+      ping();
+      _heartbeatId = setInterval(ping, HEARTBEAT_INTERVAL);
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
   // Heartbeat for prolonged outages
   _heartbeatId = setInterval(ping, HEARTBEAT_INTERVAL);
 
@@ -104,6 +117,7 @@ export function startConnectivityMonitor(): () => void {
   return () => {
     window.removeEventListener('online',  handleOnline);
     window.removeEventListener('offline', handleOffline);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     if (_heartbeatId) clearInterval(_heartbeatId);
     _heartbeatId = null;
   };

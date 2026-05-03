@@ -96,10 +96,11 @@ export function useAutoClockIn({
   onFallbackManual,
   onNotify,
 }: UseAutoClockInOptions) {
-  const wasInsideRef    = useRef(false);
-  const retriesRef      = useRef(0);
-  const attemptingRef   = useRef(false);
-  const zoneEnteredAtRef = useRef<Date | null>(null);
+  const wasInsideRef       = useRef(false);
+  const retriesRef         = useRef(0);
+  const attemptingRef      = useRef(false);
+  const zoneEnteredAtRef   = useRef<Date | null>(null);
+  const hasCheckedActiveRef = useRef(false);
 
   const isClockedInRef = useRef(isClockedIn);
   useEffect(() => { isClockedInRef.current = isClockedIn; }, [isClockedIn]);
@@ -108,10 +109,11 @@ export function useAutoClockIn({
   const prevClockedInRef = useRef(isClockedIn);
   useEffect(() => {
     if (prevClockedInRef.current && !isClockedIn) {
-      wasInsideRef.current   = false;
-      retriesRef.current     = MAX_RETRIES;
-      attemptingRef.current  = false;
-      zoneEnteredAtRef.current = null;
+      wasInsideRef.current      = false;
+      retriesRef.current        = MAX_RETRIES;
+      attemptingRef.current     = false;
+      zoneEnteredAtRef.current  = null;
+      hasCheckedActiveRef.current = false;
     }
     prevClockedInRef.current = isClockedIn;
   }, [isClockedIn]);
@@ -129,16 +131,19 @@ export function useAutoClockIn({
       attemptingRef.current = true;
       retriesRef.current    = 0;
 
-      // Check if already clocked in (e.g. from a previous session)
-      try {
-        const activeMovement = await getActiveMovement();
-        if (activeMovement) {
-          const session = await getTodaySession();
-          if (session) onSuccess(session.id);
-          attemptingRef.current = false;
-          return;
-        }
-      } catch { /* fall through */ }
+      // Check if already clocked in — only once per session, not on every GPS tick
+      if (!hasCheckedActiveRef.current) {
+        hasCheckedActiveRef.current = true;
+        try {
+          const activeMovement = await getActiveMovement();
+          if (activeMovement) {
+            const session = await getTodaySession();
+            if (session) onSuccess(session.id);
+            attemptingRef.current = false;
+            return;
+          }
+        } catch { /* fall through */ }
+      }
 
       const [deviceId, batteryLevel] = await Promise.all([
         ensureDeviceRegistered(),

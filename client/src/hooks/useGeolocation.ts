@@ -35,7 +35,7 @@ export function useGeolocation(isClockedIn = false) {
       {
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 0,
+        maximumAge: 10_000, // reuse position up to 10s old — reduces GPS fire rate
       }
     );
 
