@@ -815,7 +815,7 @@ export function AdminDashboard() {
   const branchesForUsers = isSuperAdmin ? branches : (adminBranch ? [adminBranch] : []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4 pb-8">
         <SplashedPushNotifications ref={toastRef} />
 

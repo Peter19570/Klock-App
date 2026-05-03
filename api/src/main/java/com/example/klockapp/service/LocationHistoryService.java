@@ -16,6 +16,8 @@ import com.example.klockapp.repo.WorkSessionRepo;
 import com.example.klockapp.specification.LocationHistorySpecification;
 import com.example.klockapp.util.LocationUtility;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,17 +68,13 @@ public class LocationHistoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<LocationResponse> getLocationHistory(
-            Long userId, LocationHistoryFilter filter, CustomUserPrincipal principal){
+    public Page<LocationResponse> getLocationHistory(
+            Long userId, LocationHistoryFilter filter, Pageable pageable){
         filter.setUserId(userId);
 
-        boolean isSuperAdmin = principal.getAuthorities().stream()
-                .anyMatch(a -> Objects.equals(a.getAuthority(),
-                        "ROLE_SUPER_ADMIN"));
+        Page<LocationHistory> locationHistoryPage = locationHistoryRepo
+                .findAll(LocationHistorySpecification.withFilter(filter), pageable);
 
-        List<LocationHistory> locationHistories = locationHistoryRepo
-                .findAll(LocationHistorySpecification.withFilter(filter));
-
-        return locationMapper.toListDto(locationHistories);
+        return locationHistoryPage.map(locationMapper::toDto);
     }
 }

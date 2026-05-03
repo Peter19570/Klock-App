@@ -126,7 +126,7 @@ function SessionPageContent({
       : ownerName ?? "User";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={embedded ? "bg-background" : "min-h-screen bg-background"}>
       {/* ── Sticky header ── */}
       <div
         className={`${

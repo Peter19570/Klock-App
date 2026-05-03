@@ -9,6 +9,10 @@ import com.example.klockapp.service.LocationHistoryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,19 +39,22 @@ public class LocationHistoryController {
 
     @GetMapping("/history/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<ApiResponse<List<LocationResponse>>> getLocationHistory(
+    public ResponseEntity<ApiResponse<Page<LocationResponse>>> getLocationHistory(
             @PathVariable Long id,
-            @AuthenticationPrincipal CustomUserPrincipal principal,
             @RequestParam(required = false)LocalDate minWorkDate,
-            @RequestParam(required = false)LocalDate maxWorkDate){
+            @RequestParam(required = false)LocalDate maxWorkDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size){
 
         LocationHistoryFilter filter = LocationHistoryFilter.builder()
                 .minWorkDate(minWorkDate)
                 .maxWorkDate(maxWorkDate)
                 .build();
 
-        List<LocationResponse> locationResponse = locationHistoryService
-                .getLocationHistory(id, filter, principal);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        Page<LocationResponse> locationResponse = locationHistoryService
+                .getLocationHistory(id, filter, pageable);
 
         return ResponseEntity.ok(new ApiResponse<>("User Location History", locationResponse));
     }

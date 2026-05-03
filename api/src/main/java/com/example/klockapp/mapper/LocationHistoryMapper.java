@@ -13,5 +13,7 @@ public interface LocationHistoryMapper {
 
     LocationHistory toEntity(LocationRequest request);
 
+    LocationResponse toDto(LocationHistory locationHistory);
+
     List<LocationResponse> toListDto(List<LocationHistory> locationHistories);
 }
