@@ -382,46 +382,75 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
   const [draftMin, setDraftMin] = React.useState(today);
   const [draftMax, setDraftMax] = React.useState(today);
 
-  // ── Raw data from API ─────────────────────────────────────────────────────
-  const [allPoints, setAllPoints]   = React.useState<LocationResponse[]>([]);
-  const [loading, setLoading]       = React.useState(false);
-  const [error, setError]           = React.useState<string | null>(null);
-
-  // ── Client-side pagination ────────────────────────────────────────────────
-  const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
+  // ── Server-side pagination ────────────────────────────────────────────────
+  const [points, setPoints]     = React.useState<LocationResponse[]>([]);
+  const [page, setPage]         = React.useState(0);
+  const [hasMore, setHasMore]   = React.useState(true);
+  const [loading, setLoading]   = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [error, setError]       = React.useState<string | null>(null);
+  const [totalElements, setTotalElements] = React.useState(0);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   // ── Geocoded labels: key = "lat,lng" ─────────────────────────────────────
   const [labels, setLabels] = React.useState<Record<string, string>>({});
 
-  // ── Fetch when filters change ─────────────────────────────────────────────
+  // ── Fetch page 0 when filters change ─────────────────────────────────────
   React.useEffect(() => {
     setLoading(true);
     setError(null);
-    setAllPoints([]);
-    setVisibleCount(PAGE_SIZE);
+    setPoints([]);
+    setPage(0);
+    setHasMore(true);
     setLabels({});
     getLocationHistory(userId, {
+      page: 0,
+      size: PAGE_SIZE,
       ...(minDate && { minWorkDate: minDate }),
       ...(maxDate && { maxWorkDate: maxDate }),
     })
-      .then((res) => setAllPoints(res.data.data ?? []))
+      .then((res) => {
+        const paged = res.data.data as any;
+        const content: LocationResponse[] = Array.isArray(paged?.content) ? paged.content : [];
+        setPoints(content);
+        setTotalElements(paged?.totalElements ?? 0);
+        setHasMore(!paged?.last);
+        setPage(1);
+      })
       .catch(() => setError('Failed to load location history.'))
       .finally(() => setLoading(false));
   }, [userId, minDate, maxDate]);
 
-  // ── Resolve place names for visible slice only ────────────────────────────
-  const visiblePoints = allPoints.slice(0, visibleCount);
+  // ── Load next page ────────────────────────────────────────────────────────
+  const loadMore = React.useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    getLocationHistory(userId, {
+      page,
+      size: PAGE_SIZE,
+      ...(minDate && { minWorkDate: minDate }),
+      ...(maxDate && { maxWorkDate: maxDate }),
+    })
+      .then((res) => {
+        const paged = res.data.data as any;
+        const content: LocationResponse[] = Array.isArray(paged?.content) ? paged.content : [];
+        setPoints((prev) => [...prev, ...content]);
+        setHasMore(!paged?.last);
+        setPage((p) => p + 1);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  }, [userId, page, minDate, maxDate, hasMore, loadingMore]);
 
+  // ── Resolve place names for currently visible points ──────────────────────
   React.useEffect(() => {
     let cancelled = false;
-    const unresolved = visiblePoints.filter((p) => {
+    const unresolved = points.filter((p) => {
       const k = `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`;
       return !labels[k];
     });
     if (unresolved.length === 0) return;
 
-    // Resolve one at a time with a small delay to respect Nominatim rate limit
     (async () => {
       for (const p of unresolved) {
         if (cancelled) break;
@@ -435,25 +464,19 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visiblePoints.length, allPoints]);
+  }, [points.length]);
 
   // ── Infinite scroll sentinel ──────────────────────────────────────────────
   React.useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && visibleCount < allPoints.length) {
-          setVisibleCount((c) => Math.min(c + PAGE_SIZE, allPoints.length));
-        }
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
       { threshold: 0.1 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [visibleCount, allPoints.length]);
-
-  const hasMore = visibleCount < allPoints.length;
+  }, [loadMore]);
 
   return (
     <div className="space-y-4">
@@ -595,26 +618,32 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
         <div className="text-center py-12 text-sm text-destructive border border-dashed border-destructive/30 rounded-xl">
           {error}
         </div>
-      ) : allPoints.length === 0 ? (
+      ) : points.length === 0 && !loading ? (
         <div className="text-center py-12 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
           No location history for this date range.
         </div>
       ) : (
         <>
           <p className="text-xs text-muted-foreground px-1">
-            {allPoints.length} ping{allPoints.length !== 1 ? 's' : ''} recorded
+            {totalElements} ping{totalElements !== 1 ? 's' : ''} recorded
           </p>
 
           <div className="flex flex-col gap-2">
-            {visiblePoints.map((p, i) => {
+            {points.map((p, i) => {
               const k = `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`;
               const placeName = labels[k];
+              const timestamp = p.createdAt
+                ? new Date(p.createdAt).toLocaleString(undefined, {
+                    month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })
+                : null;
               return (
                 <div
                   key={i}
                   className="flex items-start gap-3 rounded-xl border border-border bg-card p-3"
                 >
-                  {/* Index badge */}
+                  {/* Pin icon */}
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
                     <MapPin className="h-3.5 w-3.5 text-primary" />
                   </div>
@@ -633,6 +662,12 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       {p.latitude.toFixed(6)}°, {p.longitude.toFixed(6)}°
                     </p>
+                    {/* Timestamp */}
+                    {timestamp && (
+                      <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                        {timestamp}
+                      </p>
+                    )}
                   </div>
 
                   {/* Ping number */}
@@ -646,7 +681,7 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
 
           {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} className="py-2 flex justify-center">
-            {hasMore && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {loadingMore && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         </>
       )}

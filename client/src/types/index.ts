@@ -213,6 +213,7 @@ export interface LocationRequest {
 export interface LocationResponse {
   latitude: number;
   longitude: number;
+  createdAt?: string;
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

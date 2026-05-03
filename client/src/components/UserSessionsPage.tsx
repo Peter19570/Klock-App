@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,12 +7,22 @@ import {
   Loader2,
   User,
   RefreshCw,
+  SlidersHorizontal,
+  X,
+  Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { SessionHistory } from "@/components/SessionHistory";
 import { getUserSessionsById } from "@/services/sessionService";
 import type { SessionResponse, UserDetailResponse } from "@/types";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
 
 // ─── Inner page content ────────────────────────────────────────────────────────
 
@@ -35,6 +46,16 @@ function SessionPageContent({
 }: SessionPageContentProps) {
   const navigate = useNavigate();
 
+  const today = todayStr();
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [minDate, setMinDate]           = React.useState("");
+  const [maxDate, setMaxDate]           = React.useState("");
+  const [filterModalOpen, setFilterModalOpen] = React.useState(false);
+  const [draftMin, setDraftMin]         = React.useState("");
+  const [draftMax, setDraftMax]         = React.useState("");
+
+  // ── Sessions state ────────────────────────────────────────────────────────
   const [sessions, setSessions]       = React.useState<SessionResponse[]>([]);
   const [page, setPage]               = React.useState(0);
   const [hasMore, setHasMore]         = React.useState(true);
@@ -54,14 +75,24 @@ function SessionPageContent({
   }, []);
 
   const fetchPage = React.useCallback(
-    async (pageNum: number, isRefresh = false) => {
+    async (pageNum: number, isRefresh = false, overrideMin?: string, overrideMax?: string) => {
       if (loading && !isRefresh) return;
       if (!isRefresh) setLoading(true);
       try {
         const res  = await getUserSessionsById({ userId, page: pageNum, size: 20 });
         const data = res.data.data;
+
+        // Client-side date filter — backend /sessions/{id} has no date params
+        const activeMin = overrideMin !== undefined ? overrideMin : minDate;
+        const activeMax = overrideMax !== undefined ? overrideMax : maxDate;
+        const filtered = data.content.filter((s) => {
+          if (activeMin && s.workDate < activeMin) return false;
+          if (activeMax && s.workDate > activeMax) return false;
+          return true;
+        });
+
         setSessions((prev) =>
-          pageNum === 0 ? data.content : [...prev, ...data.content]
+          pageNum === 0 ? filtered : [...prev, ...filtered]
         );
         if (
           pageNum === 0 &&
@@ -81,7 +112,7 @@ function SessionPageContent({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [userId]
+    [userId, minDate, maxDate]
   );
 
   React.useEffect(() => {
@@ -89,7 +120,7 @@ function SessionPageContent({
     setPage(0);
     setHasMore(true);
     setInitialLoad(true);
-  }, [userId]);
+  }, [userId, minDate, maxDate]);
 
   React.useEffect(() => {
     if (initialLoad) fetchPage(0);
@@ -174,6 +205,23 @@ function SessionPageContent({
               </span>
             )}
             {headerActions}
+
+            {/* Filter button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 h-9"
+              onClick={() => { setDraftMin(minDate); setDraftMax(maxDate); setFilterModalOpen(true); }}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Filters</span>
+              {(minDate || maxDate) && (
+                <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                  1
+                </span>
+              )}
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
@@ -187,8 +235,122 @@ function SessionPageContent({
               />
             </Button>
           </div>
+
+          {/* Filter modal — portalled to body */}
+          {ReactDOM.createPortal(
+            <AnimatePresence>
+              {filterModalOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+                  onMouseDown={(e) => { if (e.target === e.currentTarget) setFilterModalOpen(false); }}
+                >
+                  <motion.div
+                    initial={{ scale: 0.96, opacity: 0, y: 16 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.96, opacity: 0, y: 16 }}
+                    transition={{ duration: 0.18 }}
+                    className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+                  >
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal className="h-4 w-4 text-primary" />
+                        <h2 className="text-sm font-semibold text-foreground">Filter Sessions</h2>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFilterModalOpen(false)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">From</Label>
+                        <input
+                          type="date"
+                          value={draftMin}
+                          onChange={(e) => setDraftMin(e.target.value)}
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wide">To</Label>
+                        <input
+                          type="date"
+                          value={draftMax}
+                          onChange={(e) => setDraftMax(e.target.value)}
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5 mt-5">
+                      <Button
+                        variant="outline"
+                        className="flex-1 h-9 text-sm"
+                        onClick={() => {
+                          setDraftMin("");
+                          setDraftMax("");
+                          setMinDate("");
+                          setMaxDate("");
+                          setFilterModalOpen(false);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 h-9 text-sm"
+                        onClick={() => {
+                          setDraftMin(today);
+                          setDraftMax(today);
+                          setMinDate(today);
+                          setMaxDate(today);
+                          setFilterModalOpen(false);
+                        }}
+                      >
+                        Today
+                      </Button>
+                      <Button
+                        className="flex-1 h-9 text-sm"
+                        onClick={() => {
+                          setMinDate(draftMin);
+                          setMaxDate(draftMax);
+                          setFilterModalOpen(false);
+                        }}
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>,
+            document.body,
+          )}
         </div>
       </div>
+
+      {/* ── Active filter chip ── */}
+      {(minDate || maxDate) && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-2 pb-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              <Calendar className="h-3 w-3 text-muted-foreground" />
+              {minDate === maxDate && minDate
+                ? minDate
+                : `${minDate || "…"} → ${maxDate || "…"}`}
+              <button
+                onClick={() => { setMinDate(""); setMaxDate(""); }}
+                className="text-muted-foreground hover:text-foreground ml-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Sessions (primary content) ── */}
       <div

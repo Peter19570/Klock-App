@@ -256,7 +256,8 @@ public class AttendanceService {
      * */
     @Transactional(readOnly = true)
     public Page<SessionResponse> getAllSessionsByUserId(Long id, Pageable pageable){
-        Page<WorkSession> workSessionPage = workSessionRepo.findAllByUserId(id, pageable);
+        Page<WorkSession> workSessionPage = workSessionRepo
+                .findAllByUserId(id, pageable);
         return workSessionPage.map(sessionMapper::toDto);
     }
 

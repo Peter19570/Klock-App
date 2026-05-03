@@ -119,9 +119,9 @@ export const sendLocationPing = (data: LocationRequest) =>
 
 export const getLocationHistory = (
   userId: number,
-  params: { minWorkDate?: string; maxWorkDate?: string } = {},
+  params: { page?: number; size?: number; minWorkDate?: string; maxWorkDate?: string } = {},
 ) =>
-  api.get<ApiResponse<LocationResponse[]>>(`/api/v1/location/history/${userId}`, { params });
+  api.get<ApiResponse<PageResponse<LocationResponse>>>(`/api/v1/location/history/${userId}`, { params });
 
 // ─── Offline sync (re-exported for convenience) ───────────────────────────────
 

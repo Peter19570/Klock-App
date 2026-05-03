@@ -98,6 +98,7 @@ public class SessionController {
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size){
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<SessionResponse> response = attendanceService.getAllSessionsByUserId(id, pageable);
         return ResponseEntity
