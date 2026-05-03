@@ -4,7 +4,7 @@ import {
   Search, Trash2, User, Plus,
   ArrowRightLeft, ArrowUp, Check, SlidersHorizontal, X, Loader2, RefreshCw,
   FileText, MapPin, Navigation, MoreVertical, Pencil, KeyRound, Smartphone,
-  Mail, Phone, Building2, CalendarDays,
+  Mail, Phone, Building2, CalendarDays, ChevronLeft, Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -332,40 +332,128 @@ interface UserLocationHistoryProps {
   onBack: () => void;
 }
 
-function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps) {
-  const [points, setPoints]   = React.useState<LocationResponse[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError]     = React.useState<string | null>(null);
-  const svgRef                = React.useRef<SVGSVGElement>(null);
+// ─── Reverse geocode cache ────────────────────────────────────────────────────
 
+const geocodeCache = new Map<string, string>();
+
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  if (geocodeCache.has(key)) return geocodeCache.get(key)!;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'en' } },
+    );
+    const json = await res.json();
+    const addr = json.address ?? {};
+    const place =
+      addr.road ||
+      addr.suburb ||
+      addr.neighbourhood ||
+      addr.city_district ||
+      addr.village ||
+      addr.town ||
+      addr.city ||
+      addr.county ||
+      json.display_name?.split(',')[0] ||
+      'Unknown location';
+    const city = addr.city || addr.town || addr.village || addr.county || '';
+    const label = city && city !== place ? `${place}, ${city}` : place;
+    geocodeCache.set(key, label);
+    return label;
+  } catch {
+    return 'Unknown location';
+  }
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+const PAGE_SIZE = 20;
+
+function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps) {
+  const today = todayStr();
+
+  // ── Filters ───────────────────────────────────────────────────────────────
+  const [minDate, setMinDate] = React.useState(today);
+  const [maxDate, setMaxDate] = React.useState(today);
+  const [filterModalOpen, setFilterModalOpen] = React.useState(false);
+  const [draftMin, setDraftMin] = React.useState(today);
+  const [draftMax, setDraftMax] = React.useState(today);
+
+  // ── Raw data from API ─────────────────────────────────────────────────────
+  const [allPoints, setAllPoints]   = React.useState<LocationResponse[]>([]);
+  const [loading, setLoading]       = React.useState(false);
+  const [error, setError]           = React.useState<string | null>(null);
+
+  // ── Client-side pagination ────────────────────────────────────────────────
+  const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+  // ── Geocoded labels: key = "lat,lng" ─────────────────────────────────────
+  const [labels, setLabels] = React.useState<Record<string, string>>({});
+
+  // ── Fetch when filters change ─────────────────────────────────────────────
   React.useEffect(() => {
     setLoading(true);
     setError(null);
-    getLocationHistory(userId)
-      .then((res) => setPoints(res.data.data ?? []))
+    setAllPoints([]);
+    setVisibleCount(PAGE_SIZE);
+    setLabels({});
+    getLocationHistory(userId, {
+      ...(minDate && { minWorkDate: minDate }),
+      ...(maxDate && { maxWorkDate: maxDate }),
+    })
+      .then((res) => setAllPoints(res.data.data ?? []))
       .catch(() => setError('Failed to load location history.'))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, minDate, maxDate]);
 
-  // Project lat/lng into SVG space
-  const projected = React.useMemo(() => {
-    if (points.length === 0) return [];
-    const lats = points.map((p) => p.latitude);
-    const lngs = points.map((p) => p.longitude);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-    const pad = 40;
-    const W = 540, H = 320;
-    const rangeX = maxLng - minLng || 0.001;
-    const rangeY = maxLat - minLat || 0.001;
-    return points.map((p) => ({
-      x: pad + ((p.longitude - minLng) / rangeX) * (W - pad * 2),
-      // Flip Y: larger lat = higher on screen
-      y: pad + ((maxLat - p.latitude) / rangeY) * (H - pad * 2),
-    }));
-  }, [points]);
+  // ── Resolve place names for visible slice only ────────────────────────────
+  const visiblePoints = allPoints.slice(0, visibleCount);
 
-  const polyline = projected.map((p) => `${p.x},${p.y}`).join(' ');
+  React.useEffect(() => {
+    let cancelled = false;
+    const unresolved = visiblePoints.filter((p) => {
+      const k = `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`;
+      return !labels[k];
+    });
+    if (unresolved.length === 0) return;
+
+    // Resolve one at a time with a small delay to respect Nominatim rate limit
+    (async () => {
+      for (const p of unresolved) {
+        if (cancelled) break;
+        const label = await reverseGeocode(p.latitude, p.longitude);
+        if (cancelled) break;
+        const k = `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`;
+        setLabels((prev) => ({ ...prev, [k]: label }));
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiblePoints.length, allPoints]);
+
+  // ── Infinite scroll sentinel ──────────────────────────────────────────────
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < allPoints.length) {
+          setVisibleCount((c) => Math.min(c + PAGE_SIZE, allPoints.length));
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visibleCount, allPoints.length]);
+
+  const hasMore = visibleCount < allPoints.length;
 
   return (
     <div className="space-y-4">
@@ -374,15 +462,131 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
         <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-foreground truncate flex items-center gap-2">
             <Navigation className="h-4 w-4 text-primary shrink-0" />
             Location History — {user.firstName} {user.lastName}
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Movement trail (all recorded pings)</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Recorded location pings</p>
         </div>
       </div>
 
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2 h-9 shrink-0"
+          onClick={() => { setDraftMin(minDate); setDraftMax(maxDate); setFilterModalOpen(true); }}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {(minDate !== today || maxDate !== today) && (
+            <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+              1
+            </span>
+          )}
+        </Button>
+
+        {/* Active date chips */}
+        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+          {(minDate || maxDate) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground">
+              <Calendar className="h-3 w-3 text-muted-foreground" />
+              {minDate === maxDate ? minDate : `${minDate || '…'} → ${maxDate || '…'}`}
+              <button
+                onClick={() => { setMinDate(today); setMaxDate(today); }}
+                className="text-muted-foreground hover:text-foreground ml-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Filter modal */}
+      {ReactDOM.createPortal(
+        <AnimatePresence>
+          {filterModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4 z-[60]"
+              onMouseDown={(e) => { if (e.target === e.currentTarget) setFilterModalOpen(false); }}
+            >
+              <motion.div
+                initial={{ scale: 0.96, opacity: 0, y: 16 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.96, opacity: 0, y: 16 }}
+                transition={{ duration: 0.18 }}
+                className="bg-card rounded-2xl border border-border shadow-xl p-5 w-full max-w-sm"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4 text-primary" />
+                    <h2 className="text-sm font-semibold text-foreground">Filter by Date</h2>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFilterModalOpen(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">From</Label>
+                    <input
+                      type="date"
+                      value={draftMin}
+                      onChange={(e) => setDraftMin(e.target.value)}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">To</Label>
+                    <input
+                      type="date"
+                      value={draftMax}
+                      onChange={(e) => setDraftMax(e.target.value)}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 mt-5">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-9 text-sm"
+                    onClick={() => {
+                      setDraftMin(today);
+                      setDraftMax(today);
+                      setMinDate(today);
+                      setMaxDate(today);
+                      setFilterModalOpen(false);
+                    }}
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    className="flex-1 h-9 text-sm"
+                    onClick={() => {
+                      setMinDate(draftMin);
+                      setMaxDate(draftMax);
+                      setFilterModalOpen(false);
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
+
+      {/* Content */}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -391,79 +595,58 @@ function UserLocationHistory({ userId, user, onBack }: UserLocationHistoryProps)
         <div className="text-center py-12 text-sm text-destructive border border-dashed border-destructive/30 rounded-xl">
           {error}
         </div>
-      ) : points.length === 0 ? (
+      ) : allPoints.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
-          No location history recorded for this user.
+          No location history for this date range.
         </div>
       ) : (
         <>
-          {/* Map */}
-          <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
-            <svg
-              ref={svgRef}
-              viewBox="0 0 540 320"
-              className="w-full"
-              style={{ background: 'var(--muted)' }}
-            >
-              {/* Grid lines */}
-              {[1,2,3].map((i) => (
-                <React.Fragment key={i}>
-                  <line x1={0} y1={i * 80} x2={540} y2={i * 80} stroke="var(--border)" strokeWidth={0.5} />
-                  <line x1={i * 135} y1={0} x2={i * 135} y2={320} stroke="var(--border)" strokeWidth={0.5} />
-                </React.Fragment>
-              ))}
+          <p className="text-xs text-muted-foreground px-1">
+            {allPoints.length} ping{allPoints.length !== 1 ? 's' : ''} recorded
+          </p>
 
-              {/* Trail line */}
-              {projected.length > 1 && (
-                <polyline
-                  points={polyline}
-                  fill="none"
-                  stroke="var(--primary)"
-                  strokeWidth={2.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity={0.8}
-                />
-              )}
+          <div className="flex flex-col gap-2">
+            {visiblePoints.map((p, i) => {
+              const k = `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`;
+              const placeName = labels[k];
+              return (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 rounded-xl border border-border bg-card p-3"
+                >
+                  {/* Index badge */}
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                  </div>
 
-              {/* Points */}
-              {projected.map((p, i) => {
-                const isFirst = i === 0;
-                const isLast  = i === projected.length - 1;
-                return (
-                  <circle
-                    key={i}
-                    cx={p.x}
-                    cy={p.y}
-                    r={isFirst || isLast ? 7 : 4}
-                    fill={isFirst ? 'var(--primary)' : isLast ? '#10b981' : 'var(--primary)'}
-                    opacity={isFirst || isLast ? 1 : 0.5}
-                  />
-                );
-              })}
+                  <div className="min-w-0 flex-1">
+                    {/* Place name */}
+                    <p className="text-sm font-medium text-foreground leading-snug">
+                      {placeName ?? (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Resolving…
+                        </span>
+                      )}
+                    </p>
+                    {/* Lat / lng */}
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {p.latitude.toFixed(6)}°, {p.longitude.toFixed(6)}°
+                    </p>
+                  </div>
 
-              {/* Start / End labels */}
-              {projected.length > 0 && (
-                <>
-                  <text x={projected[0].x + 10} y={projected[0].y + 4} fontSize={10} fill="var(--primary)" fontWeight="600">Start</text>
-                  <text x={projected[projected.length - 1].x + 10} y={projected[projected.length - 1].y + 4} fontSize={10} fill="#10b981" fontWeight="600">End</text>
-                </>
-              )}
-            </svg>
+                  {/* Ping number */}
+                  <span className="text-[10px] font-semibold text-muted-foreground/60 shrink-0 tabular-nums mt-1">
+                    #{i + 1}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-muted p-3">
-              <p className="text-xs text-muted-foreground">Total Points</p>
-              <p className="text-sm font-semibold text-foreground mt-0.5">{points.length}</p>
-            </div>
-            <div className="rounded-xl bg-muted p-3">
-              <p className="text-xs text-muted-foreground">Coordinates</p>
-              <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
-                {points[points.length - 1]?.latitude.toFixed(4)}°, {points[points.length - 1]?.longitude.toFixed(4)}°
-              </p>
-            </div>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="py-2 flex justify-center">
+            {hasMore && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
         </>
       )}
@@ -937,7 +1120,7 @@ function UserDetailHeaderActions({
       <div className="hidden sm:flex items-center gap-2 shrink-0">
         <Button variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={onLocation}>
           <MapPin className="h-3.5 w-3.5" />
-          View Location History
+          Location History
         </Button>
         <Button variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={onLogs}>
           <FileText className="h-3.5 w-3.5" />
@@ -972,7 +1155,7 @@ function UserDetailHeaderActions({
                     onClick={() => { setSheetOpen(false); onLocation(); }}
                   >
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    View Location History
+                    Location History
                   </button>
                   <button
                     className="flex items-center gap-3 px-5 py-3.5 text-sm text-foreground hover:bg-muted/40 transition-colors"
